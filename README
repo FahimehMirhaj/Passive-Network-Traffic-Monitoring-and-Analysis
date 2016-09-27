@@ -1,0 +1,1066 @@
+Fahimeh Mirhaj
+Network Security Course
+------------------------------------------
+This file contains a brief description about my implementation and 
+examples of outputs from the program.
+
+This folder, contains the following files:
+	- Makefile: This file contains the appropriate commands to build and run the program.
+	In order to build and run the program, steps are:
+		- Deleting any previous executable by "make clean"
+		- Compiling and Building the program by "make"
+		- Running the program. By "./mydump [-i interface] [-r file] [-s string] expression"
+			Examples (the result will be seen at the end of this file):
+			- ./mydump -r sample.pcap -s GET
+				This execution of the program will read the packets from the file sample.pcap and only prints the information of the packets which has GET in their payload.
+			- ./mydump -r sample.pcap tcp
+				This execution of the program will read the packets from the file sample.pcap and only prints the packets which have tcp protocol for their transport layer. In the command, tcp is a BPF filter.
+			- ./mydump tcp
+				This execution of the program will read the packets from the default interface (as it is not mentioned in the command by -i) and captures only the packets which have tcp for their transport layer.
+			- ./mydump -i eth0
+				This execution of the program will read the packets from the interface "eth0" (as it is mentioned in the command by -i) and captures any kind of packets.
+
+	- mydump.c and headers.h: These files contain the program which I have implemented for the assingment.
+		headers.h file contains the definition of headers for ETHERNET protocol, IP protocol, TCP protocol. So, for other protocols such as UDP and ICMP, I have used the header definitions given in the <netinet/ip_icmp.h> and <netinet/udp.h> header files.
+
+		mydump.c program:
+		This file contains the several functions and a main function which is described as bellow:
+			- function main:
+				Header: int main(int argc, char **argv);
+				
+				Description: This functions first reads the arguments from the user (if provided any) such as -i, -r etc. Then, 
+				
+				-  If the user deteremines the -r options (to read the pcap file), by calling the function pcap_open_offline (@ line 90), it sets the handle (which is a pointer of type pcap_t) accordingly.
+				
+
+				- If the user doesn't mention any pcap file to be read (by -r option) or doesn't mention the interface, it gets the default interface to be captured, by calling the function pcap_lookupdev (@ line 102). Then, it tries to open the interface by calling the function pcap_open_live (@ line 125). If the user mentions -i option, they there is no attempt to get the default interface as the interface is passed already as the argument of the program execution.
+
+				- Then, the program checks whether it needs to set the BPF filter or not (@ line 140). If it is required to be set, first it compiles the filter by calling the function pcap_compile (@ line 142) and it sets the filter by calling the function pcap_setfilter (@ line 148).
+
+				- Then, it calls the function pcap_loop with parameters (handle, 0, process_packet, NULL). In this function call, the second argument, 0, means that we are interested in captuing infinite number of packets (i.e., as program is running, capture all possible packets) and for each captured packet, the function process_packet gets called !
+
+				- When capturing is done, the clean-up phase takes place by calling the functions pcap_freecode and pcap_close (@ lines 158 and 159).
+
+			- function process_packet:
+				Header: void process_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+
+				Description: This function gets called everytime a packet is captured. By using the headers defined previously (whether inside the headers.h file or in the netinet library), it extracts the correct information and parses it. So, first is the ETHERNET header. It reads the required information (and extracts them to be printed later). Second is the IP header. It reads the required information (and extracts them to be printed later). Then, third is the transport layer protocol which based on the protocol type, it extracts the corresponding information accordingly. However, before going forward, by calling the function strstr(payload, string) {and also checking size_payload > 0}, it checks to see whether the non-empty payload contains the string passed to the program as an argument (of course, if the string is NULL, such check is cancelled). This happens in the switch statement (from line 300 to 488). So, for example, if the transport protocol is TCP, it gets the TCP header and extracts the payload and prints all the information before the payload such as timestamp, source & destination MAC address, etc. Please note that the information printed is not only from the TCP header. Some of them are from Ethernet header (e.g., ethernet->ether_shost and ethernet->ether_dhost), some of them are from IP header (e.g,. ip->ip_src, ip->ip_dst) and so on.
+
+				After printing all the header information, if the payload is non-empty, it prints the information by calling the function print_payload (E.g., @ line 355).
+
+			- function print_payload:
+				Header: void print_payload(const u_char *payload, int len)
+
+				Description: This function gets the array of characters as a pointer, called payload and the length of the array and it prints the payload. If it fits inside one line, it calls the function print_hex_ascii_line (@ line 243) and returns. Otherwise, it chops the payload into several lines and per line, it calls the function print_hex_ascii_line (@ lines 252 and 262).
+
+			- function print_hex_ascii_line:
+				Header: void print_hex_ascii_line(const u_char *payload, int len, int offset)
+
+				Description: As its name indicates, it prints the data in rows of 16 bytes as HEX   ASCII.
+
+	- sample.pcap: this is a sample pcap file which I used to test the program.
+
+Sample outputs:
+	-Example 1: ./mydump -r sample.pcap -s GET
+		output:
+
+		Log::iFlag = 0, interface = (null), rFlag = 1, fileName = sample.pcap
+		Log::sFlag = 1, string = GET, Filter expression = (null)
+
+		2004-05-13 06:17:08.222534 00:00:01:00:00:00 -> FE:FF:20:00:01:00 type 0x0800 len 533
+		145.254.160.237:3372 -> 145.254.160.237:80 TCP 
+		47 45 54 20 2F 64 6F 77  6E 6C 6F 61 64 2E 68 74    GET /download.ht
+		6D 6C 20 48 54 54 50 2F  31 2E 31 0D 0A 48 6F 73    ml HTTP/1.1..Hos
+		74 3A 20 77 77 77 2E 65  74 68 65 72 65 61 6C 2E    t: www.ethereal.
+		63 6F 6D 0D 0A 55 73 65  72 2D 41 67 65 6E 74 3A    com..User-Agent:
+		20 4D 6F 7A 69 6C 6C 61  2F 35 2E 30 20 28 57 69     Mozilla/5.0 (Wi
+		6E 64 6F 77 73 3B 20 55  3B 20 57 69 6E 64 6F 77    ndows; U; Window
+		73 20 4E 54 20 35 2E 31  3B 20 65 6E 2D 55 53 3B    s NT 5.1; en-US;
+		20 72 76 3A 31 2E 36 29  20 47 65 63 6B 6F 2F 32     rv:1.6) Gecko/2
+		30 30 34 30 31 31 33 0D  0A 41 63 63 65 70 74 3A    0040113..Accept:
+		20 74 65 78 74 2F 78 6D  6C 2C 61 70 70 6C 69 63     text/xml,applic
+		61 74 69 6F 6E 2F 78 6D  6C 2C 61 70 70 6C 69 63    ation/xml,applic
+		61 74 69 6F 6E 2F 78 68  74 6D 6C 2B 78 6D 6C 2C    ation/xhtml+xml,
+		74 65 78 74 2F 68 74 6D  6C 3B 71 3D 30 2E 39 2C    text/html;q=0.9,
+		74 65 78 74 2F 70 6C 61  69 6E 3B 71 3D 30 2E 38    text/plain;q=0.8
+		2C 69 6D 61 67 65 2F 70  6E 67 2C 69 6D 61 67 65    ,image/png,image
+		2F 6A 70 65 67 2C 69 6D  61 67 65 2F 67 69 66 3B    /jpeg,image/gif;
+		71 3D 30 2E 32 2C 2A 2F  2A 3B 71 3D 30 2E 31 0D    q=0.2,*/*;q=0.1.
+		0A 41 63 63 65 70 74 2D  4C 61 6E 67 75 61 67 65    .Accept-Language
+		3A 20 65 6E 2D 75 73 2C  65 6E 3B 71 3D 30 2E 35    : en-us,en;q=0.5
+		0D 0A 41 63 63 65 70 74  2D 45 6E 63 6F 64 69 6E    ..Accept-Encodin
+		67 3A 20 67 7A 69 70 2C  64 65 66 6C 61 74 65 0D    g: gzip,deflate.
+		0A 41 63 63 65 70 74 2D  43 68 61 72 73 65 74 3A    .Accept-Charset:
+		20 49 53 4F 2D 38 38 35  39 2D 31 2C 75 74 66 2D     ISO-8859-1,utf-
+		38 3B 71 3D 30 2E 37 2C  2A 3B 71 3D 30 2E 37 0D    8;q=0.7,*;q=0.7.
+		0A 4B 65 65 70 2D 41 6C  69 76 65 3A 20 33 30 30    .Keep-Alive: 300
+		0D 0A 43 6F 6E 6E 65 63  74 69 6F 6E 3A 20 6B 65    ..Connection: ke
+		65 70 2D 61 6C 69 76 65  0D 0A 52 65 66 65 72 65    ep-alive..Refere
+		72 3A 20 68 74 74 70 3A  2F 2F 77 77 77 2E 65 74    r: http://www.et
+		68 65 72 65 61 6C 2E 63  6F 6D 2F 64 65 76 65 6C    hereal.com/devel
+		6F 70 6D 65 6E 74 2E 68  74 6D 6C 0D 0A 0D 0A       opment.html....
+
+		2004-05-13 06:17:10.295515 00:00:01:00:00:00 -> FE:FF:20:00:01:00 type 0x0800 len 775
+		145.254.160.237:3371 -> 145.254.160.237:80 TCP 
+		47 45 54 20 2F 70 61 67  65 61 64 2F 61 64 73 3F    GET /pagead/ads?
+		63 6C 69 65 6E 74 3D 63  61 2D 70 75 62 2D 32 33    client=ca-pub-23
+		30 39 31 39 31 39 34 38  36 37 33 36 32 39 26 72    09191948673629&r
+		61 6E 64 6F 6D 3D 31 30  38 34 34 34 33 34 33 30    andom=1084443430
+		32 38 35 26 6C 6D 74 3D  31 30 38 32 34 36 37 30    285&lmt=10824670
+		32 30 26 66 6F 72 6D 61  74 3D 34 36 38 78 36 30    20&format=468x60
+		5F 61 73 26 6F 75 74 70  75 74 3D 68 74 6D 6C 26    _as&output=html&
+		75 72 6C 3D 68 74 74 70  25 33 41 25 32 46 25 32    url=http%3A%2F%2
+		46 77 77 77 2E 65 74 68  65 72 65 61 6C 2E 63 6F    Fwww.ethereal.co
+		6D 25 32 46 64 6F 77 6E  6C 6F 61 64 2E 68 74 6D    m%2Fdownload.htm
+		6C 26 63 6F 6C 6F 72 5F  62 67 3D 46 46 46 46 46    l&color_bg=FFFFF
+		46 26 63 6F 6C 6F 72 5F  74 65 78 74 3D 33 33 33    F&color_text=333
+		33 33 33 26 63 6F 6C 6F  72 5F 6C 69 6E 6B 3D 30    333&color_link=0
+		30 30 30 30 30 26 63 6F  6C 6F 72 5F 75 72 6C 3D    00000&color_url=
+		36 36 36 36 33 33 26 63  6F 6C 6F 72 5F 62 6F 72    666633&color_bor
+		64 65 72 3D 36 36 36 36  33 33 20 48 54 54 50 2F    der=666633 HTTP/
+		31 2E 31 0D 0A 48 6F 73  74 3A 20 70 61 67 65 61    1.1..Host: pagea
+		64 32 2E 67 6F 6F 67 6C  65 73 79 6E 64 69 63 61    d2.googlesyndica
+		74 69 6F 6E 2E 63 6F 6D  0D 0A 55 73 65 72 2D 41    tion.com..User-A
+		67 65 6E 74 3A 20 4D 6F  7A 69 6C 6C 61 2F 35 2E    gent: Mozilla/5.
+		30 20 28 57 69 6E 64 6F  77 73 3B 20 55 3B 20 57    0 (Windows; U; W
+		69 6E 64 6F 77 73 20 4E  54 20 35 2E 31 3B 20 65    indows NT 5.1; e
+		6E 2D 55 53 3B 20 72 76  3A 31 2E 36 29 20 47 65    n-US; rv:1.6) Ge
+		63 6B 6F 2F 32 30 30 34  30 31 31 33 0D 0A 41 63    cko/20040113..Ac
+		63 65 70 74 3A 20 74 65  78 74 2F 78 6D 6C 2C 61    cept: text/xml,a
+		70 70 6C 69 63 61 74 69  6F 6E 2F 78 6D 6C 2C 61    pplication/xml,a
+		70 70 6C 69 63 61 74 69  6F 6E 2F 78 68 74 6D 6C    pplication/xhtml
+		2B 78 6D 6C 2C 74 65 78  74 2F 68 74 6D 6C 3B 71    +xml,text/html;q
+		3D 30 2E 39 2C 74 65 78  74 2F 70 6C 61 69 6E 3B    =0.9,text/plain;
+		71 3D 30 2E 38 2C 69 6D  61 67 65 2F 70 6E 67 2C    q=0.8,image/png,
+		69 6D 61 67 65 2F 6A 70  65 67 2C 69 6D 61 67 65    image/jpeg,image
+		2F 67 69 66 3B 71 3D 30  2E 32 2C 2A 2F 2A 3B 71    /gif;q=0.2,*/*;q
+		3D 30 2E 31 0D 0A 41 63  63 65 70 74 2D 4C 61 6E    =0.1..Accept-Lan
+		67 75 61 67 65 3A 20 65  6E 2D 75 73 2C 65 6E 3B    guage: en-us,en;
+		71 3D 30 2E 35 0D 0A 41  63 63 65 70 74 2D 45 6E    q=0.5..Accept-En
+		63 6F 64 69 6E 67 3A 20  67 7A 69 70 2C 64 65 66    coding: gzip,def
+		6C 61 74 65 0D 0A 41 63  63 65 70 74 2D 43 68 61    late..Accept-Cha
+		72 73 65 74 3A 20 49 53  4F 2D 38 38 35 39 2D 31    rset: ISO-8859-1
+		2C 75 74 66 2D 38 3B 71  3D 30 2E 37 2C 2A 3B 71    ,utf-8;q=0.7,*;q
+		3D 30 2E 37 0D 0A 4B 65  65 70 2D 41 6C 69 76 65    =0.7..Keep-Alive
+		3A 20 33 30 30 0D 0A 43  6F 6E 6E 65 63 74 69 6F    : 300..Connectio
+		6E 3A 20 6B 65 65 70 2D  61 6C 69 76 65 0D 0A 52    n: keep-alive..R
+		65 66 65 72 65 72 3A 20  68 74 74 70 3A 2F 2F 77    eferer: http://w
+		77 77 2E 65 74 68 65 72  65 61 6C 2E 63 6F 6D 2F    ww.ethereal.com/
+		64 6F 77 6E 6C 6F 61 64  2E 68 74 6D 6C 0D 0A 0D    download.html...
+		0A                                                  .
+
+//----------------------------------------------------------------------------------------------
+
+	- Exmaple 2: ./mydump -r sample.pcap tcp
+		output (I just copied and pasted some portion of it):
+		Log::iFlag = 0, interface = (null), rFlag = 1, fileName = sample.pcap
+		Log::sFlag = 0, string = (null), Filter expression = tcp
+
+		2004-05-13 06:17:07.311224 00:00:01:00:00:00 -> FE:FF:20:00:01:00 type 0x0800 len 62
+		145.254.160.237:3372 -> 145.254.160.237:80 TCP 
+
+		2004-05-13 06:17:08.222534 FE:FF:20:00:01:00 -> 00:00:01:00:00:00 type 0x0800 len 62
+		65.208.228.223:80 -> 65.208.228.223:3372 TCP 
+
+		2004-05-13 06:17:08.222534 00:00:01:00:00:00 -> FE:FF:20:00:01:00 type 0x0800 len 54
+		145.254.160.237:3372 -> 145.254.160.237:80 TCP 
+
+		2004-05-13 06:17:08.222534 00:00:01:00:00:00 -> FE:FF:20:00:01:00 type 0x0800 len 533
+		145.254.160.237:3372 -> 145.254.160.237:80 TCP 
+		47 45 54 20 2F 64 6F 77  6E 6C 6F 61 64 2E 68 74    GET /download.ht
+		6D 6C 20 48 54 54 50 2F  31 2E 31 0D 0A 48 6F 73    ml HTTP/1.1..Hos
+		74 3A 20 77 77 77 2E 65  74 68 65 72 65 61 6C 2E    t: www.ethereal.
+		63 6F 6D 0D 0A 55 73 65  72 2D 41 67 65 6E 74 3A    com..User-Agent:
+		20 4D 6F 7A 69 6C 6C 61  2F 35 2E 30 20 28 57 69     Mozilla/5.0 (Wi
+		6E 64 6F 77 73 3B 20 55  3B 20 57 69 6E 64 6F 77    ndows; U; Window
+		73 20 4E 54 20 35 2E 31  3B 20 65 6E 2D 55 53 3B    s NT 5.1; en-US;
+		20 72 76 3A 31 2E 36 29  20 47 65 63 6B 6F 2F 32     rv:1.6) Gecko/2
+		30 30 34 30 31 31 33 0D  0A 41 63 63 65 70 74 3A    0040113..Accept:
+		20 74 65 78 74 2F 78 6D  6C 2C 61 70 70 6C 69 63     text/xml,applic
+		61 74 69 6F 6E 2F 78 6D  6C 2C 61 70 70 6C 69 63    ation/xml,applic
+		61 74 69 6F 6E 2F 78 68  74 6D 6C 2B 78 6D 6C 2C    ation/xhtml+xml,
+		74 65 78 74 2F 68 74 6D  6C 3B 71 3D 30 2E 39 2C    text/html;q=0.9,
+		74 65 78 74 2F 70 6C 61  69 6E 3B 71 3D 30 2E 38    text/plain;q=0.8
+		2C 69 6D 61 67 65 2F 70  6E 67 2C 69 6D 61 67 65    ,image/png,image
+		2F 6A 70 65 67 2C 69 6D  61 67 65 2F 67 69 66 3B    /jpeg,image/gif;
+		71 3D 30 2E 32 2C 2A 2F  2A 3B 71 3D 30 2E 31 0D    q=0.2,*/*;q=0.1.
+		0A 41 63 63 65 70 74 2D  4C 61 6E 67 75 61 67 65    .Accept-Language
+		3A 20 65 6E 2D 75 73 2C  65 6E 3B 71 3D 30 2E 35    : en-us,en;q=0.5
+		0D 0A 41 63 63 65 70 74  2D 45 6E 63 6F 64 69 6E    ..Accept-Encodin
+		67 3A 20 67 7A 69 70 2C  64 65 66 6C 61 74 65 0D    g: gzip,deflate.
+		0A 41 63 63 65 70 74 2D  43 68 61 72 73 65 74 3A    .Accept-Charset:
+		20 49 53 4F 2D 38 38 35  39 2D 31 2C 75 74 66 2D     ISO-8859-1,utf-
+		38 3B 71 3D 30 2E 37 2C  2A 3B 71 3D 30 2E 37 0D    8;q=0.7,*;q=0.7.
+		0A 4B 65 65 70 2D 41 6C  69 76 65 3A 20 33 30 30    .Keep-Alive: 300
+		0D 0A 43 6F 6E 6E 65 63  74 69 6F 6E 3A 20 6B 65    ..Connection: ke
+		65 70 2D 61 6C 69 76 65  0D 0A 52 65 66 65 72 65    ep-alive..Refere
+		72 3A 20 68 74 74 70 3A  2F 2F 77 77 77 2E 65 74    r: http://www.et
+		68 65 72 65 61 6C 2E 63  6F 6D 2F 64 65 76 65 6C    hereal.com/devel
+		6F 70 6D 65 6E 74 2E 68  74 6D 6C 0D 0A 0D 0A       opment.html....
+
+		2004-05-13 06:17:08.783340 FE:FF:20:00:01:00 -> 00:00:01:00:00:00 type 0x0800 len 54
+		65.208.228.223:80 -> 65.208.228.223:3372 TCP 
+
+		2004-05-13 06:17:08.993643 FE:FF:20:00:01:00 -> 00:00:01:00:00:00 type 0x0800 len 1434
+		65.208.228.223:80 -> 65.208.228.223:3372 TCP 
+		48 54 54 50 2F 31 2E 31  20 32 30 30 20 4F 4B 0D    HTTP/1.1 200 OK.
+		0A 44 61 74 65 3A 20 54  68 75 2C 20 31 33 20 4D    .Date: Thu, 13 M
+		61 79 20 32 30 30 34 20  31 30 3A 31 37 3A 31 32    ay 2004 10:17:12
+		20 47 4D 54 0D 0A 53 65  72 76 65 72 3A 20 41 70     GMT..Server: Ap
+		61 63 68 65 0D 0A 4C 61  73 74 2D 4D 6F 64 69 66    ache..Last-Modif
+		69 65 64 3A 20 54 75 65  2C 20 32 30 20 41 70 72    ied: Tue, 20 Apr
+		20 32 30 30 34 20 31 33  3A 31 37 3A 30 30 20 47     2004 13:17:00 G
+		4D 54 0D 0A 45 54 61 67  3A 20 22 39 61 30 31 61    MT..ETag: "9a01a
+		2D 34 36 39 36 2D 37 65  33 35 34 62 30 30 22 0D    -4696-7e354b00".
+		0A 41 63 63 65 70 74 2D  52 61 6E 67 65 73 3A 20    .Accept-Ranges: 
+		62 79 74 65 73 0D 0A 43  6F 6E 74 65 6E 74 2D 4C    bytes..Content-L
+		65 6E 67 74 68 3A 20 31  38 30 37 30 0D 0A 4B 65    ength: 18070..Ke
+		65 70 2D 41 6C 69 76 65  3A 20 74 69 6D 65 6F 75    ep-Alive: timeou
+		74 3D 31 35 2C 20 6D 61  78 3D 31 30 30 0D 0A 43    t=15, max=100..C
+		6F 6E 6E 65 63 74 69 6F  6E 3A 20 4B 65 65 70 2D    onnection: Keep-
+		41 6C 69 76 65 0D 0A 43  6F 6E 74 65 6E 74 2D 54    Alive..Content-T
+		79 70 65 3A 20 74 65 78  74 2F 68 74 6D 6C 3B 20    ype: text/html; 
+		63 68 61 72 73 65 74 3D  49 53 4F 2D 38 38 35 39    charset=ISO-8859
+		2D 31 0D 0A 0D 0A 3C 3F  78 6D 6C 20 76 65 72 73    -1....<?xml vers
+		69 6F 6E 3D 22 31 2E 30  22 20 65 6E 63 6F 64 69    ion="1.0" encodi
+		6E 67 3D 22 55 54 46 2D  38 22 3F 3E 0A 3C 21 44    ng="UTF-8"?>.<!D
+		4F 43 54 59 50 45 20 68  74 6D 6C 0A 20 20 50 55    OCTYPE html.  PU
+		42 4C 49 43 20 22 2D 2F  2F 57 33 43 2F 2F 44 54    BLIC "-//W3C//DT
+		44 20 58 48 54 4D 4C 20  31 2E 30 20 53 74 72 69    D XHTML 1.0 Stri
+		63 74 2F 2F 45 4E 22 0A  20 20 22 44 54 44 2F 78    ct//EN".  "DTD/x
+		68 74 6D 6C 31 2D 73 74  72 69 63 74 2E 64 74 64    html1-strict.dtd
+		22 3E 0A 3C 68 74 6D 6C  20 78 6D 6C 6E 73 3D 22    ">.<html xmlns="
+		68 74 74 70 3A 2F 2F 77  77 77 2E 77 33 2E 6F 72    http://www.w3.or
+		67 2F 31 39 39 39 2F 78  68 74 6D 6C 22 20 78 6D    g/1999/xhtml" xm
+		6C 3A 6C 61 6E 67 3D 22  65 6E 22 20 6C 61 6E 67    l:lang="en" lang
+		3D 22 65 6E 22 3E 0A 20  20 3C 68 65 61 64 3E 0A    ="en">.  <head>.
+		20 20 20 20 3C 74 69 74  6C 65 3E 45 74 68 65 72        <title>Ether
+		65 61 6C 3A 20 44 6F 77  6E 6C 6F 61 64 3C 2F 74    eal: Download</t
+		69 74 6C 65 3E 0A 20 20  20 20 3C 73 74 79 6C 65    itle>.    <style
+		20 74 79 70 65 3D 22 74  65 78 74 2F 63 73 73 22     type="text/css"
+		20 6D 65 64 69 61 3D 22  61 6C 6C 22 3E 0A 09 40     media="all">..@
+		69 6D 70 6F 72 74 20 75  72 6C 28 22 6D 6D 2F 63    import url("mm/c
+		73 73 2F 65 74 68 65 72  65 61 6C 2D 33 2D 30 2E    ss/ethereal-3-0.
+		63 73 73 22 29 3B 0A 20  20 20 20 3C 2F 73 74 79    css");.    </sty
+		6C 65 3E 0A 3C 2F 68 65  61 64 3E 0A 20 20 3C 62    le>.</head>.  <b
+		6F 64 79 3E 0A 20 20 20  20 3C 64 69 76 20 63 6C    ody>.    <div cl
+		61 73 73 3D 22 74 6F 70  22 3E 0A 20 20 20 20 3C    ass="top">.    <
+		74 61 62 6C 65 20 77 69  64 74 68 3D 22 31 30 30    table width="100
+		25 22 20 63 65 6C 6C 73  70 61 63 69 6E 67 3D 22    %" cellspacing="
+		30 22 20 63 65 6C 6C 70  61 64 64 69 6E 67 3D 22    0" cellpadding="
+		30 22 20 62 6F 72 64 65  72 3D 22 30 22 20 73 75    0" border="0" su
+		6D 6D 61 72 79 3D 22 22  3E 0A 20 20 20 20 20 20    mmary="">.      
+		3C 74 72 3E 0A 20 20 20  20 20 20 20 20 3C 74 64    <tr>.        <td
+		20 76 61 6C 69 67 6E 3D  22 6D 69 64 64 6C 65 22     valign="middle"
+		20 77 69 64 74 68 3D 22  31 22 3E 0A 09 20 20 3C     width="1">..  <
+		61 20 68 72 65 66 3D 22  2F 22 3E 3C 69 6D 67 20    a href="/"><img 
+		63 6C 61 73 73 3D 22 6C  6F 67 6F 22 20 74 69 74    class="logo" tit
+		6C 65 3D 22 45 74 68 65  72 65 61 6C 20 68 6F 6D    le="Ethereal hom
+		65 22 20 73 72 63 3D 22  6D 6D 2F 69 6D 61 67 65    e" src="mm/image
+		2F 65 6C 6F 67 6F 2D 36  34 2D 74 72 61 6E 73 2E    /elogo-64-trans.
+		67 69 66 22 20 61 6C 74  3D 22 22 20 77 69 64 74    gif" alt="" widt
+		68 3D 22 36 34 22 20 68  65 69 67 68 74 3D 22 36    h="64" height="6
+		34 22 3E 3C 2F 69 6D 67  3E 3C 2F 61 3E 0A 20 20    4"></img></a>.  
+		20 20 20 20 20 20 3C 2F  74 64 3E 0A 20 20 20 20          </td>.    
+		20 20 20 20 3C 74 64 20  61 6C 69 67 6E 3D 22 6C        <td align="l
+		65 66 74 22 20 76 61 6C  69 67 6E 3D 22 6D 69 64    eft" valign="mid
+		64 6C 65 22 3E 0A 20 20  20 20 20 20 20 20 20 20    dle">.          
+		3C 68 32 3E 45 74 68 65  72 65 61 6C 3C 2F 68 32    <h2>Ethereal</h2
+		3E 0A 20 20 20 20 20 20  20 20 20 20 3C 68 35 20    >.          <h5 
+		73 74 79 6C 65 3D 22 77  68 69 74 65 2D 73 70 61    style="white-spa
+		63 65 3A 20 6E 6F 77 72  61 70 3B 22 3E 44 6F 77    ce: nowrap;">Dow
+		6E 6C 6F 61 64 3C 2F 68  35 3E 0A 20 20 20 20 20    nload</h5>.     
+		20 20 20 3C 2F 74 64 3E  0A 20 20 20 20 20 20 20       </td>.       
+		20 3C 74 64 20 61 6C 69  67 6E 3D 22 72 69 67 68     <td align="righ
+		74 22 3E 0A 09 20 20 20  20 3C 74 61 62 6C 65 20    t">..    <table 
+		73 74 79 6C 65 3D 22 6D  61 72 67 69 6E 2D 72 69    style="margin-ri
+		67 68 74 3A 20 31 30 70  78 3B 22 20 63 65 6C 6C    ght: 10px;" cell
+		73 70 61 63 69 6E 67 3D  22 30 22 20 63 65 6C 6C    spacing="0" cell
+		70 61 64 64 69 6E 67 3D  22 30 22 20 62 6F 72 64    padding="0" bord
+		65 72 3D 22 30 22 20 73  75 6D 6D 61 72 79 3D 22    er="0" summary="
+		22 3E 0A 20 20 20 20 20  20 20 20 20 20 20 20 20    ">.             
+		20 3C 66 6F 72 6D 20 6E  61 6D 65 3D 22 73 65 61     <form name="sea
+		72 63 68 22 20 6D 65 74  68 6F 64 3D 22 70 6F 73    rch" method="pos
+		74 22 20 61 63 74 69 6F  6E 3D 22 68 74 74 70 3A    t" action="http:
+		2F 2F 77 77 77 2E 65 74  68 65 72 65 61 6C 2E 63    //www.ethereal.c
+		6F 6D 2F 63 67 69 2D 62  69 6E 2F 68 74 73 65 61    om/cgi-bin/htsea
+		72 63 68 22 3E 0A 20 20  20 20 20 20 20 20 20 20    rch">.          
+		20 20 20 20 3C 74 72 3E  0A 09 20 20 20 20 20 20        <tr>..      
+		20 20 3C 74 64 3E 0A 09  20 20 20 20 20 20 20 20      <td>..        
+		20 20 3C 64 69 76 20 63  6C 61 73 73 3D 22 74 6F      <div class="to
+		70 66 6F 72 6D 74 65 78  74 22 3E 0A 20 20 20 20    pformtext">.    
+		20 20 20 20                                             
+
+		2004-05-13 06:17:09.123830 00:00:01:00:00:00 -> FE:FF:20:00:01:00 type 0x0800 len 54
+		145.254.160.237:3372 -> 145.254.160.237:80 TCP 
+
+		2004-05-13 06:17:09.123830 FE:FF:20:00:01:00 -> 00:00:01:00:00:00 type 0x0800 len 1434
+		65.208.228.223:80 -> 65.208.228.223:3372 TCP 
+		20 20 20 20 20 20 20 20  20 20 3C 61 20 68 72 65              <a hre
+		66 3D 22 73 65 61 72 63  68 2E 68 74 6D 6C 22 3E    f="search.html">
+		53 65 61 72 63 68 3A 3C  2F 61 3E 0A 09 09 20 20    Search:</a>...  
+		3C 2F 64 69 76 3E 0A 09  20 20 20 20 20 20 20 20    </div>..        
+		3C 2F 74 64 3E 0A 09 20  20 20 20 20 20 20 20 3C    </td>..        <
+		74 64 3E 0A 09 20 20 20  20 20 20 20 20 20 20 3C    td>..          <
+		64 69 76 20 63 6C 61 73  73 3D 22 74 6F 70 66 6F    div class="topfo
+		72 6D 74 65 78 74 22 3E  0A 20 20 20 20 20 20 20    rmtext">.       
+		20 20 20 20 20 20 20 20  20 20 20 3C 69 6E 70 75               <inpu
+		74 20 74 79 70 65 3D 22  74 65 78 74 22 20 73 69    t type="text" si
+		7A 65 3D 22 31 32 22 20  6E 61 6D 65 3D 22 77 6F    ze="12" name="wo
+		72 64 73 22 3E 0A 09 09  20 20 3C 69 6E 70 75 74    rds">...  <input
+		20 74 79 70 65 3D 22 68  69 64 64 65 6E 22 20 6E     type="hidden" n
+		61 6D 65 3D 22 63 6F 6E  66 69 67 22 20 76 61 6C    ame="config" val
+		75 65 3D 22 65 74 68 65  72 65 61 6C 22 3E 0A 09    ue="ethereal">..
+		09 20 20 3C 2F 64 69 76  3E 0A 09 20 20 20 20 20    .  </div>..     
+		20 20 20 3C 2F 74 64 3E  0A 09 09 3C 74 64 20 76       </td>...<td v
+		61 6C 69 67 6E 3D 22 62  6F 74 74 6F 6D 22 3E 0A    align="bottom">.
+		09 09 20 20 3C 69 6E 70  75 74 20 74 79 70 65 3D    ..  <input type=
+		22 69 6D 61 67 65 22 20  63 6C 61 73 73 3D 22 67    "image" class="g
+		6F 62 75 74 74 6F 6E 22  20 73 72 63 3D 22 6D 6D    obutton" src="mm
+		2F 69 6D 61 67 65 2F 67  6F 2D 62 75 74 74 6F 6E    /image/go-button
+		2E 67 69 66 22 3E 0A 09  09 3C 2F 74 64 3E 0A 20    .gif">...</td>. 
+		20 20 20 20 20 20 20 20  20 20 20 20 20 3C 2F 74                 </t
+		72 3E 0A 20 20 20 20 20  20 20 20 20 20 20 20 20    r>.             
+		20 3C 2F 66 6F 72 6D 3E  0A 3C 2F 74 61 62 6C 65     </form>.</table
+		3E 0A 09 20 20 3C 2F 64  69 76 3E 0A 20 20 20 20    >..  </div>.    
+		20 20 20 20 3C 2F 74 64  3E 0A 20 20 20 20 20 20        </td>.      
+		3C 2F 74 72 3E 0A 20 20  20 20 3C 2F 74 61 62 6C    </tr>.    </tabl
+		65 3E 0A 20 20 20 20 3C  2F 64 69 76 3E 0A 3C 64    e>.    </div>.<d
+		69 76 20 63 6C 61 73 73  3D 22 73 69 74 65 62 61    iv class="siteba
+		72 22 3E 0A 3C 70 3E 0A  20 20 3C 61 20 68 72 65    r">.<p>.  <a hre
+		66 3D 22 2F 22 3E 48 6F  6D 65 3C 2F 61 3E 0A 20    f="/">Home</a>. 
+		20 3C 73 70 61 6E 20 63  6C 61 73 73 3D 22 73 69     <span class="si
+		74 65 62 61 72 73 65 70  22 3E 7C 3C 2F 73 70 61    tebarsep">|</spa
+		6E 3E 0A 20 20 3C 61 20  68 72 65 66 3D 22 69 6E    n>.  <a href="in
+		74 72 6F 64 75 63 74 69  6F 6E 2E 68 74 6D 6C 22    troduction.html"
+		3E 49 6E 74 72 6F 64 75  63 74 69 6F 6E 3C 2F 61    >Introduction</a
+		3E 0A 20 20 3C 73 70 61  6E 20 63 6C 61 73 73 3D    >.  <span class=
+		22 73 69 74 65 62 61 72  73 65 70 22 3E 7C 3C 2F    "sitebarsep">|</
+		73 70 61 6E 3E 0A 20 20  44 6F 77 6E 6C 6F 61 64    span>.  Download
+		0A 20 20 3C 73 70 61 6E  20 63 6C 61 73 73 3D 22    .  <span class="
+		73 69 74 65 62 61 72 73  65 70 22 3E 7C 3C 2F 73    sitebarsep">|</s
+		70 61 6E 3E 0A 20 20 3C  61 20 68 72 65 66 3D 22    pan>.  <a href="
+		64 6F 63 73 2F 22 3E 44  6F 63 75 6D 65 6E 74 61    docs/">Documenta
+		74 69 6F 6E 3C 2F 61 3E  0A 20 20 3C 73 70 61 6E    tion</a>.  <span
+		20 63 6C 61 73 73 3D 22  73 69 74 65 62 61 72 73     class="sitebars
+		65 70 22 3E 7C 3C 2F 73  70 61 6E 3E 0A 20 20 3C    ep">|</span>.  <
+		61 20 68 72 65 66 3D 22  6C 69 73 74 73 2F 22 3E    a href="lists/">
+		4C 69 73 74 73 3C 2F 61  3E 0A 20 20 3C 73 70 61    Lists</a>.  <spa
+		6E 20 63 6C 61 73 73 3D  22 73 69 74 65 62 61 72    n class="sitebar
+		73 65 70 22 3E 7C 3C 2F  73 70 61 6E 3E 0A 20 20    sep">|</span>.  
+		3C 61 20 68 72 65 66 3D  22 66 61 71 2E 68 74 6D    <a href="faq.htm
+		6C 22 3E 46 41 51 3C 2F  61 3E 0A 20 20 3C 73 70    l">FAQ</a>.  <sp
+		61 6E 20 63 6C 61 73 73  3D 22 73 69 74 65 62 61    an class="siteba
+		72 73 65 70 22 3E 7C 3C  2F 73 70 61 6E 3E 0A 20    rsep">|</span>. 
+		20 3C 61 20 68 72 65 66  3D 22 64 65 76 65 6C 6F     <a href="develo
+		70 6D 65 6E 74 2E 68 74  6D 6C 22 3E 44 65 76 65    pment.html">Deve
+		6C 6F 70 6D 65 6E 74 3C  2F 61 3E 0A 3C 2F 70 3E    lopment</a>.</p>
+		0A 3C 2F 64 69 76 3E 0A  3C 64 69 76 20 63 6C 61    .</div>.<div cla
+		73 73 3D 22 6E 61 76 62  61 72 22 3E 0A 3C 70 3E    ss="navbar">.<p>
+		0A 20 20 3C 61 20 68 72  65 66 3D 22 23 72 65 6C    .  <a href="#rel
+		65 61 73 65 73 22 3E 4F  66 66 69 63 69 61 6C 20    eases">Official 
+		52 65 6C 65 61 73 65 73  3C 2F 61 3E 0A 20 20 3C    Releases</a>.  <
+		73 70 61 6E 20 63 6C 61  73 73 3D 22 6E 61 76 62    span class="navb
+		61 72 73 65 70 22 3E 7C  3C 2F 73 70 61 6E 3E 0A    arsep">|</span>.
+		20 20 3C 61 20 68 72 65  66 3D 22 23 6F 74 68 65      <a href="#othe
+		72 70 6C 61 74 22 3E 4F  74 68 65 72 20 50 6C 61    rplat">Other Pla
+		74 66 6F 72 6D 73 3C 2F  61 3E 0A 20 20 3C 73 70    tforms</a>.  <sp
+		61 6E 20 63 6C 61 73 73  3D 22 6E 61 76 62 61 72    an class="navbar
+		73 65 70 22 3E 7C 3C 2F  73 70 61 6E 3E 0A 20 20    sep">|</span>.  
+		3C 61 20 68 72 65 66 3D  22 23 6F 74 68 65 72 64    <a href="#otherd
+		6F 77 6E 22 3E 4F 74 68  65 72 20 44 6F 77 6E 6C    own">Other Downl
+		6F 61 64 73 3C 2F 61 3E  0A 20 20 3C 73 70 61 6E    oads</a>.  <span
+		20 63 6C 61 73 73 3D 22  6E 61 76 62 61 72 73 65     class="navbarse
+		70 22 3E 7C 3C 2F 73 70  61 6E 3E 0A 20 20 3C 61    p">|</span>.  <a
+		20 68 72 65 66 3D 22 23  6C 65 67 61 6C 22 3E 4C     href="#legal">L
+		65 67 61 6C 20 4E 6F 74  69 63 65 73 3C 2F 61 3E    egal Notices</a>
+		0A 3C 2F 70 3E 0A 3C 2F  64 69 76 3E 0A 3C 21 2D    .</p>.</div>.<!-
+		2D 20 42 65 67 69 6E 20  41 64 20 34 36 38 78 36    - Begin Ad 468x6
+		30 20 2D 2D 3E 0A 3C 64  69 76 20 63 6C 61 73 73    0 -->.<div class
+		3D 22 61 64 62 6C 6F 63  6B 22 3E 0A 3C 73 63 72    ="adblock">.<scr
+		69 70 74 20 74 79 70 65  3D 22 74 65 78 74 2F 6A    ipt type="text/j
+		61 76 61 73 63 72 69 70  74 22 3E 3C 21 2D 2D 0A    avascript"><!--.
+		67 6F 6F 67 6C 65 5F 61  64 5F 63 6C 69 65 6E 74    google_ad_client
+		20 3D 20 22 70 75 62 2D  32 33 30 39 31 39 31 39     = "pub-23091919
+		34 38 36 37                                         4867
+
+//----------------------------------------------------------------------------------------------
+
+	- Example 3: ./mydump tcp
+		output (I just copied and pasted some portion of it):
+
+		2016-03-08 13:21:51.472791 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 66
+		130.245.165.115:33813 -> 130.245.165.115:443 TCP 
+
+		2016-03-08 13:21:51.481030 04:A1:51:78:00:78 -> 28:D2:44:20:1A:7A type 0x0800 len 2902
+		74.125.30.106:443 -> 74.125.30.106:33813 TCP 
+		52 7D 0B A7 26 82 12 12  B0 9E 8A 09 51 42 BF 25    R}..&.......QB.%
+		BB BA 4A F3 75 03 03 D0  BB 3C DB A0 DD 9B 26 3C    ..J.u....<....&<
+		64 E1 D4 9D 77 7C 9A 9C  DB 40 0C A6 38 B5 C7 C2    d...w|...@..8...
+		24 E2 50 AB F8 1E F1 BB  E1 B1 BF CF 1A F0 00 05    $.P.............
+		90 3C 10 70 5E 1F 53 4F  02 8E CB 06 D3 F6 7E 7D    .<.p^.SO......~}
+		0E 8E 7C 56 85 62 4A AC  5F 43 79 2E A2 56 00 AE    ..|V.bJ._Cy..V..
+		DD AA EF DC 24 9D B5 26  EA 71 12 2B AF A5 79 8C    ....$..&.q.+..y.
+		3D 08 27 0B 4C 7B 9A 4A  AD ED 43 C1 E7 1A 11 5A    =.'.L{.J..C....Z
+		56 1B 55 EA 21 3B D1 13  68 3D EA 43 1C 5D B1 0F    V.U.!;..h=.C.]..
+		FD 7E 12 98 14 B4 C0 10  18 AA EB C0 BD 90 4F 38    .~............O8
+		FB CB D7 58 5F 13 D7 F2  DB BD 7E 64 FE 01 2B 2F    ...X_.....~d..+/
+		0C 29 67 04 96 E1 D8 A6  5A E6 76 1B E4 C1 FE 6A    .)g.....Z.v....j
+		99 D0 E6 ED A7 5D 59 F7  C8 F0 6C 21 15 6A 61 18    .....]Y...l!.ja.
+		08 B4 47 60 17 0B F8 97  44 E9 76 D1 37 85 E4 EF    ..G`....D.v.7...
+		05 89 05 47 10 0A 0C 4A  E2 76 BC 0E 05 B9 14 40    ...G...J.v.....@
+		74 55 61 70 66 B1 F7 68  25 4B 61 C8 7B 19 FA 29    tUapf..h%Ka.{..)
+		0A CF 71 0B 8F 95 E6 E7  01 3F 09 43 F8 18 CE 8F    ..q......?.C....
+		FD 63 8F FC 7C DF 44 CF  34 7C 17 77 B3 0A 47 54    .c..|.D.4|.w..GT
+		D6 68 F7 19 18 E0 CA 8B  E4 C6 F5 CE 04 E3 85 7F    .h..............
+		21 74 D7 F9 FB 4C 34 35  E7 9E EC 7A 53 4C 17 03    !t...L45...zSL..
+		03 05 85 00 00 00 00 00  00 00 7C 04 A5 BF 6F 94    ..........|...o.
+		3A F7 B2 00 D5 14 ED 6D  B7 CF 45 6D 5B 7D 33 B6    :......m..Em[}3.
+		3D 8F AC 35 D8 F6 19 F3  82 A7 F1 1D 01 D2 CE 2C    =..5...........,
+		21 07 83 AB 28 7E 59 4D  46 AB 34 73 AB 0B 13 93    !...(~YMF.4s....
+		F6 3A E8 F2 C2 CB 1D 23  E1 D5 C9 B1 CD 73 29 B3    .:.....#.....s).
+		6E 12 BF 26 12 58 92 8E  7C A4 E6 6A 27 D9 57 50    n..&.X..|..j'.WP
+		F5 B8 2F EE 0E 52 BA BB  B9 69 A1 57 E8 CD 04 00    ../..R...i.W....
+		8F 76 3B 3E 41 54 84 2C  0A C4 60 11 D2 42 E5 34    .v;>AT.,..`..B.4
+		71 AC DD 99 89 32 FD ED  E4 7C ED 57 EF 30 DA 62    q....2...|.W.0.b
+		A2 87 58 1B 70 F7 C0 B1  7A 9E 78 7E 12 4B 1B BE    ..X.p...z.x~.K..
+		DF E3 A6 2B C1 ED AF A0  CC C7 61 78 F1 54 CF AE    ...+......ax.T..
+		1B F7 62 38 B2 1E 11 25  3E D6 22 77 3B 6A CB 58    ..b8...%>."w;j.X
+		EC 53 25 E0 92 83 55 3B  BB 39 97 A4 2E 88 1F 71    .S%...U;.9.....q
+		78 66 5D 7B 10 27 7A F8  F5 93 BB BA E8 22 40 C1    xf]{.'z......"@.
+		50 C1 44 50 F7 31 B5 1C  B9 E2 7E BA DC AA FA 01    P.DP.1....~.....
+		53 D6 EB 6F EA A1 D1 0B  84 48 6D 47 5C 21 AB FC    S..o.....HmG\!..
+		92 FF 3A 85 AF B3 2C 5E  40 88 0E B0 B0 57 4C 7A    ..:...,^@....WLz
+		7C 87 59 AD 25 A0 46 A6  FF EA 72 4C E2 37 DA 8C    |.Y.%.F...rL.7..
+		89 8C 00 1D F0 31 BF 11  D0 5D AE DF 6C B3 38 2B    .....1...]..l.8+
+		44 0C 2A B1 0F 6E D1 16  37 F8 B1 5A 2D 2F DE 72    D.*..n..7..Z-/.r
+		9C C5 C7 CB 92 12 ED 0E  1A 7C C5 C8 84 E6 B3 FC    .........|......
+		B9 90 46 69 B5 E3 29 71  0F 51 B2 34 2A 43 CE 98    ..Fi..)q.Q.4*C..
+		1F CF B3 BE 9E FC 6E 31  30 A5 D8 94 FF 7F 9B E9    ......n10.......
+		8D 7A 85 0B E5 7B 14 26  42 70 16 B4 D6 C5 E0 FD    .z...{.&Bp......
+		D1 BA 71 FB 47 FA 39 26  79 D3 C8 0E 72 A4 D9 5F    ..q.G.9&y...r.._
+		7E 86 4C 0A F1 F9 39 61  58 87 6D 3C BA DD 49 7E    ~.L...9aX.m<..I~
+		29 F3 E4 25 29 40 73 0F  F7 24 5A 78 74 6A 08 01    )..%)@s..$Zxtj..
+		A0 A8 B1 2D 16 FD B1 B2  E6 82 A3 A3 E6 5A 1B C3    ...-.........Z..
+		1D 93 AE 67 74 05 7A 08  09 D5 EF EB 58 90 21 CA    ...gt.z.....X.!.
+		48 A6 15 82 0C 40 FE 84  55 C4 F4 4D 66 B4 4C B7    H....@..U..Mf.L.
+		41 07 9C 89 01 6E 28 02  7D 1D FF D4 3A F2 B6 08    A....n(.}...:...
+		01 4C F1 96 3B 66 96 8A  95 4B C0 13 FD 01 67 C1    .L..;f...K....g.
+		73 85 43 2A 17 66 2A FA  B2 99 FC C4 9B C1 C5 B4    s.C*.f*.........
+		F6 54 07 2A 69 E8 B4 FD  A9 25 DA 72 A7 82 CF 29    .T.*i....%.r...)
+		95 72 1B D9 96 DF B3 A2  2D 2C 2B 8A 04 8F 47 A3    .r......-,+...G.
+		DB 42 46 C6 21 D3 14 FA  53 3E 22 BF 25 D0 6A 90    .BF.!...S>".%.j.
+		F5 B6 F8 01 F9 F2 5F AA  16 C2 AD 5D 65 16 BC 5D    ......_....]e..]
+		8C 74 53 2A 55 AF 32 E5  51 5A F8 A7 3A 6F 2C 42    .tS*U.2.QZ..:o,B
+		EB 91 DC 83 A4 BF 4C A9  0F 0D 0D 9C DD D9 ED BD    ......L.........
+		3B 92 FF DC 9C 5D 39 31  61 C5 1C 6D 50 3C D4 1E    ;....]91a..mP<..
+		1D 4E 1A 30 CF 17 B6 C4  12 C8 E6 77 56 BD 80 B8    .N.0.......wV...
+		3B 2F 6F 75 ED 90 7D 1C  7C 70 8E E6 F9 90 90 2D    ;/ou..}.|p.....-
+		85 C5 03 86 1C 30 AC FA  86 4F 3A F7 4C 98 00 BE    .....0...O:.L...
+		91 DC 8C 25 0E 63 12 1B  C6 E5 10 45 33 A3 54 4D    ...%.c.....E3.TM
+		4B 0B DC 92 B0 CF 67 EB  61 92 AA B1 B5 D9 94 7F    K.....g.a.......
+		DC A8 EC 4A BC 6D 1D 54  C0 C2 42 A6 B0 4A 9E BA    ...J.m.T..B..J..
+		3D 4D DE A9 79 87 8A AA  D9 4D 41 73 90 95 6B 2C    =M..y....MAs..k,
+		6E 92 08 7F E9 28 41 6D  BE 58 30 00 E9 64 6A CB    n....(Am.X0..dj.
+		C9 A8 23 6B 58 6E 0B 59  6B D0 53 A2 34 1A 02 90    ..#kXn.Yk.S.4...
+		8C 36 7B 06 BE 75 75 FF  27 3A 83 59 63 22 CF 57    .6{..uu.':.Yc".W
+		5E 34 63 B0 CC 4A 6F CA  ED 90 8D 39 77 B6 53 CD    ^4c..Jo....9w.S.
+		92 C4 7A DD C6 74 9D 66  E1 D3 18 A0 59 72 94 15    ..z..t.f....Yr..
+		EF 61 C6 8F CD 0D A3 91  E8 0F 93 E1 EC F0 1A AB    .a..............
+		76 4D F1 9D 98 24 03 85  2F CB B1 38 F4 18 DA 40    vM...$../..8...@
+		A0 04 AE 9B 7E 95 57 A5  18 55 9B 32 55 B2 98 C9    ....~.W..U.2U...
+		EA 70 E6 45 EB 62 3F 1B  98 EF F2 FE 16 97 D6 73    .p.E.b?........s
+		18 CD 79 E1 98 D4 44 E4  A9 F0 24 DB 8C 5B 5E 67    ..y...D...$..[^g
+		F1 4F 6B B4 ED 29 55 45  A0 5B 6A D4 18 E7 6B 68    .Ok..)UE.[j...kh
+		77 37 68 02 F9 71 0E 8B  46 98 C2 6C EE 9E 48 69    w7h..q..F..l..Hi
+		C3 81 62 F0 77 5C 1E EC  53 7B 9E 7B 6D 6A 72 0C    ..b.w\..S{.{mjr.
+		56 5E D7 72 48 F3 E6 D6  32 AE 40 97 3A A5 DE 2A    V^.rH...2.@.:..*
+		24 C2 73 65 FD F7 75 A7  7E 72 DD D9 87 8E 13 49    $.se..u.~r.....I
+		A9 5B A2 79 68 90 66 83  0E 29 03 FE 30 E3 C3 70    .[.yh.f..)..0..p
+		94 27 96 C4 81 AE 43 55  D0 88 BF 75 28 0B CB 75    .'....CU...u(..u
+		A1 98 67 25 B3 97 21 96  93 3F C7 B3 E2 62 3B 23    ..g%..!..?...b;#
+		C3 5E 04 BF B7 C7 7E EA  80 F4 D4 16 0D 38 32 B0    .^....~......82.
+		B3 E3 B8 23 22 40 DF B9  B2 BF 67 37 71 8E 65 C6    ...#"@....g7q.e.
+		B1 55 56 06 77 DE BC 65  8F 42 AA 87 DF 43 8F 6D    .UV.w..e.B...C.m
+		F9 51 95 30 D4 7E B7 C3  0B D2 49 A9 CE 77 17 5D    .Q.0.~....I..w.]
+		6D 8E FC 49 43 D9 C8 1E  F7 41 18 1E 26 66 81 28    m..IC....A..&f.(
+		52 86 A3 3E 72 91 0F C6  ED 53 0B B5 00 00 00 00    R..>r....S......
+		00 00 00 00 00 00 00 00  01 00 00 00 42 00 00 00    ............B...
+		42 00 00 00 46 00 54 00  3F 18 DF 56 C1 59 AC 1C    B...F.T.?..V.Y..
+		00 00 00 00 00 00 00 00  11 00 08 00 02 00 00 00    ................
+		01 00 04 06 28 D2 44 20  1A 7A 00 00 00 00 00 00    ....(.D .z......
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 04 A1    ................
+		51 78 00 78 28 D2 44 20  1A 7A 08 00 45 00 00 34    Qx.x(.D .z..E..4
+		1B E4 40 00 40 06 8D 90  82 F5 A5 73 4A 7D 1E 6A    ..@.@......sJ}.j
+		84 15 01 BB 94 31 1A 2E  F5 5B 97 4A 80 10 08 6B    .....1...[.J...k
+		AE 76 00 00 01 01 08 0A  00 13 08 E0 A3 92 C1 2F    .v............./
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00    ................
+		00 00 00 00                                         ....
+
+		2016-03-08 13:21:51.481057 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 66
+		130.245.165.115:33813 -> 130.245.165.115:443 TCP 
+
+
+//----------------------------------------------------------------------------------------------
+
+	- Example 4: ./mydump -i eth0
+		output (I just copied and pasted some portion of it):
+
+		Log::iFlag = 1, interface = eth0, rFlag = 0, fileName = (null)
+		Log::sFlag = 0, string = (null), Filter expression = (null)
+		Log::Interface: eth0
+
+		2016-03-08 13:26:09.846509 DC:38:E1:53:E2:C1 -> 01:80:C2:00:00:00 type 0x0069 len 119
+		1.0.0.1 -> 1.0.0.1 OTHER 
+
+		2016-03-08 13:26:10.620730 04:A1:51:78:00:78 -> 28:D2:44:20:1A:7A type 0x0806 len 60
+		0.120.130.245 -> 0.120.130.245 OTHER 
+
+		2016-03-08 13:26:10.620767 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0806 len 42
+		26.122.130.245 -> 26.122.130.245 OTHER 
+
+		2016-03-08 13:26:11.734470 DC:38:E1:53:E2:C1 -> 01:80:C2:00:00:00 type 0x0069 len 119
+		1.0.0.1 -> 1.0.0.1 OTHER 
+
+		2016-03-08 13:26:12.905557 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 74
+		130.245.165.115:13916 -> 130.245.165.115:53 UDP 
+		7C E9 01 00 00 01 00 00  00 00 00 00 03 77 77 77    |............www
+		06 67 6F 6F 67 6C 65 03  63 6F 6D 00 00 01 00 01    .google.com.....
+
+		2016-03-08 13:26:12.905566 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 74
+		130.245.165.115:13916 -> 130.245.165.115:53 UDP 
+		7C E9 01 00 00 01 00 00  00 00 00 00 03 77 77 77    |............www
+		06 67 6F 6F 67 6C 65 03  63 6F 6D 00 00 01 00 01    .google.com.....
+
+		2016-03-08 13:26:12.905579 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 74
+		130.245.165.115:4552 -> 130.245.165.115:53 UDP 
+		09 B8 01 00 00 01 00 00  00 00 00 00 03 77 77 77    .............www
+		06 67 6F 6F 67 6C 65 03  63 6F 6D 00 00 01 00 01    .google.com.....
+
+		2016-03-08 13:26:12.907578 04:A1:51:78:00:78 -> 28:D2:44:20:1A:7A type 0x0800 len 306
+		130.245.1.15:53 -> 130.245.1.15:4552 UDP 
+		09 B8 81 80 00 01 00 06  00 04 00 04 03 77 77 77    .............www
+		06 67 6F 6F 67 6C 65 03  63 6F 6D 00 00 01 00 01    .google.com.....
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 69    ............J}.i
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 63    ............J}.c
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 68    ............J}.h
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 93    ............J}..
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 6A    ............J}.j
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 67    ............J}.g
+		C0 10 00 02 00 01 00 01  49 04 00 06 03 6E 73 33    ........I....ns3
+		C0 10 C0 10 00 02 00 01  00 01 49 04 00 06 03 6E    ..........I....n
+		73 31 C0 10 C0 10 00 02  00 01 00 01 49 04 00 06    s1..........I...
+		03 6E 73 34 C0 10 C0 10  00 02 00 01 00 01 49 04    .ns4..........I.
+		00 06 03 6E 73 32 C0 10  C0 9E 00 01 00 01 00 01    ...ns2..........
+		49 04 00 04 D8 EF 20 0A  C0 C2 00 01 00 01 00 01    I..... .........
+		49 04 00 04 D8 EF 22 0A  C0 8C 00 01 00 01 00 01    I.....".........
+		49 04 00 04 D8 EF 24 0A  C0 B0 00 01 00 01 00 01    I.....$.........
+		49 04 00 04 D8 EF 26 0A                             I.....&.
+
+		2016-03-08 13:26:12.907589 04:A1:51:78:00:78 -> 28:D2:44:20:1A:7A type 0x0800 len 306
+		130.245.1.15:53 -> 130.245.1.15:13916 UDP 
+		7C E9 81 80 00 01 00 06  00 04 00 04 03 77 77 77    |............www
+		06 67 6F 6F 67 6C 65 03  63 6F 6D 00 00 01 00 01    .google.com.....
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 69    ............J}.i
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 63    ............J}.c
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 68    ............J}.h
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 6A    ............J}.j
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 93    ............J}..
+		C0 0C 00 01 00 01 00 00  01 18 00 04 4A 7D 1E 67    ............J}.g
+		C0 10 00 02 00 01 00 01  49 04 00 06 03 6E 73 33    ........I....ns3
+		C0 10 C0 10 00 02 00 01  00 01 49 04 00 06 03 6E    ..........I....n
+		73 32 C0 10 C0 10 00 02  00 01 00 01 49 04 00 06    s2..........I...
+		03 6E 73 31 C0 10 C0 10  00 02 00 01 00 01 49 04    .ns1..........I.
+		00 06 03 6E 73 34 C0 10  C0 B0 00 01 00 01 00 01    ...ns4..........
+		49 04 00 04 D8 EF 20 0A  C0 9E 00 01 00 01 00 01    I..... .........
+		49 04 00 04 D8 EF 22 0A  C0 8C 00 01 00 01 00 01    I.....".........
+		49 04 00 04 D8 EF 24 0A  C0 C2 00 01 00 01 00 01    I.....$.........
+		49 04 00 04 D8 EF 26 0A                             I.....&.
+
+		2016-03-08 13:26:12.907757 04:A1:51:78:00:78 -> 28:D2:44:20:1A:7A type 0x0800 len 306
+		130.245.1.48:53 -> 130.245.1.48:13916 UDP 
+		7C E9 81 80 00 01 00 06  00 04 00 04 03 77 77 77    |............www
+		06 67 6F 6F 67 6C 65 03  63 6F 6D 00 00 01 00 01    .google.com.....
+		C0 0C 00 01 00 01 00 00  00 38 00 04 AD C2 CC 68    .........8.....h
+		C0 0C 00 01 00 01 00 00  00 38 00 04 AD C2 CC 69    .........8.....i
+		C0 0C 00 01 00 01 00 00  00 38 00 04 AD C2 CC 93    .........8......
+		C0 0C 00 01 00 01 00 00  00 38 00 04 AD C2 CC 67    .........8.....g
+		C0 0C 00 01 00 01 00 00  00 38 00 04 AD C2 CC 63    .........8.....c
+		C0 0C 00 01 00 01 00 00  00 38 00 04 AD C2 CC 6A    .........8.....j
+		C0 10 00 02 00 01 00 01  39 C2 00 06 03 6E 73 33    ........9....ns3
+		C0 10 C0 10 00 02 00 01  00 01 39 C2 00 06 03 6E    ..........9....n
+		73 31 C0 10 C0 10 00 02  00 01 00 01 39 C2 00 06    s1..........9...
+		03 6E 73 34 C0 10 C0 10  00 02 00 01 00 01 39 C2    .ns4..........9.
+		00 06 03 6E 73 32 C0 10  C0 9E 00 01 00 01 00 02    ...ns2..........
+		8B 4B 00 04 D8 EF 20 0A  C0 C2 00 01 00 01 00 00    .K.... .........
+		9C 12 00 04 D8 EF 22 0A  C0 8C 00 01 00 01 00 02    ......".........
+		67 78 00 04 D8 EF 24 0A  C0 B0 00 01 00 01 00 02    gx....$.........
+		8B 4B 00 04 D8 EF 26 0A                             .K....&.
+
+//----------------------------------------------------------------------------------------------
+
+	- Example5: ./mydump -i eth0 -s GET
+		output (I just copied and pasted some portion of it):
+
+		Log::iFlag = 1, interface = eth0, rFlag = 0, fileName = (null)
+		Log::sFlag = 1, string = GET, Filter expression = (null)
+		Log::Interface: eth0
+
+		2016-03-08 13:28:35.062936 00:1E:67:38:7B:44 -> 33:33:00:00:00:FB type 0x86dd len 106
+		0.0.0.0 -> 0.0.0.0 OTHER 
+
+		2016-03-08 13:28:36.064215 00:1E:67:38:7B:44 -> 33:33:00:00:00:FB type 0x86dd len 106
+		0.0.0.0 -> 0.0.0.0 OTHER 
+
+		2016-03-08 13:28:36.383476 DC:38:E1:53:E2:C1 -> 01:80:C2:00:00:00 type 0x0069 len 119
+		1.0.0.1 -> 1.0.0.1 OTHER 
+
+		2016-03-08 13:28:36.441178 DC:38:E1:53:C3:8A -> 01:80:C2:00:00:0E type 0x88cc len 341
+		57.53.57.6 -> 57.53.57.6 OTHER 
+
+		2016-03-08 13:28:38.066605 00:1E:67:38:7B:44 -> 33:33:00:00:00:FB type 0x86dd len 106
+		0.0.0.0 -> 0.0.0.0 OTHER 
+
+		2016-03-08 13:28:38.331496 DC:38:E1:53:E2:C1 -> 01:80:C2:00:00:00 type 0x0069 len 119
+		1.0.0.1 -> 1.0.0.1 OTHER 
+
+		2016-03-08 13:28:38.769896 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 342
+		130.245.165.115:40928 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 20 48 54  54 50 2F 31 2E 31 0D 0A    GET / HTTP/1.1..
+		48 6F 73 74 3A 20 61 6D  61 7A 6F 6E 2E 63 6F 6D    Host: amazon.com
+		0D 0A 55 73 65 72 2D 41  67 65 6E 74 3A 20 4D 6F    ..User-Agent: Mo
+		7A 69 6C 6C 61 2F 35 2E  30 20 28 58 31 31 3B 20    zilla/5.0 (X11; 
+		55 62 75 6E 74 75 3B 20  4C 69 6E 75 78 20 78 38    Ubuntu; Linux x8
+		36 5F 36 34 3B 20 72 76  3A 34 34 2E 30 29 20 47    6_64; rv:44.0) G
+		65 63 6B 6F 2F 32 30 31  30 30 31 30 31 20 46 69    ecko/20100101 Fi
+		72 65 66 6F 78 2F 34 34  2E 30 0D 0A 41 63 63 65    refox/44.0..Acce
+		70 74 3A 20 74 65 78 74  2F 68 74 6D 6C 2C 61 70    pt: text/html,ap
+		70 6C 69 63 61 74 69 6F  6E 2F 78 68 74 6D 6C 2B    plication/xhtml+
+		78 6D 6C 2C 61 70 70 6C  69 63 61 74 69 6F 6E 2F    xml,application/
+		78 6D 6C 3B 71 3D 30 2E  39 2C 2A 2F 2A 3B 71 3D    xml;q=0.9,*/*;q=
+		30 2E 38 0D 0A 41 63 63  65 70 74 2D 4C 61 6E 67    0.8..Accept-Lang
+		75 61 67 65 3A 20 65 6E  2D 55 53 2C 65 6E 3B 71    uage: en-US,en;q
+		3D 30 2E 35 0D 0A 41 63  63 65 70 74 2D 45 6E 63    =0.5..Accept-Enc
+		6F 64 69 6E 67 3A 20 67  7A 69 70 2C 20 64 65 66    oding: gzip, def
+		6C 61 74 65 0D 0A 43 6F  6E 6E 65 63 74 69 6F 6E    late..Connection
+		3A 20 6B 65 65 70 2D 61  6C 69 76 65 0D 0A 0D 0A    : keep-alive....
+
+		2016-03-08 13:28:38.849315 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 346
+		130.245.165.115:41874 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 20 48 54  54 50 2F 31 2E 31 0D 0A    GET / HTTP/1.1..
+		48 6F 73 74 3A 20 77 77  77 2E 61 6D 61 7A 6F 6E    Host: www.amazon
+		2E 63 6F 6D 0D 0A 55 73  65 72 2D 41 67 65 6E 74    .com..User-Agent
+		3A 20 4D 6F 7A 69 6C 6C  61 2F 35 2E 30 20 28 58    : Mozilla/5.0 (X
+		31 31 3B 20 55 62 75 6E  74 75 3B 20 4C 69 6E 75    11; Ubuntu; Linu
+		78 20 78 38 36 5F 36 34  3B 20 72 76 3A 34 34 2E    x x86_64; rv:44.
+		30 29 20 47 65 63 6B 6F  2F 32 30 31 30 30 31 30    0) Gecko/2010010
+		31 20 46 69 72 65 66 6F  78 2F 34 34 2E 30 0D 0A    1 Firefox/44.0..
+		41 63 63 65 70 74 3A 20  74 65 78 74 2F 68 74 6D    Accept: text/htm
+		6C 2C 61 70 70 6C 69 63  61 74 69 6F 6E 2F 78 68    l,application/xh
+		74 6D 6C 2B 78 6D 6C 2C  61 70 70 6C 69 63 61 74    tml+xml,applicat
+		69 6F 6E 2F 78 6D 6C 3B  71 3D 30 2E 39 2C 2A 2F    ion/xml;q=0.9,*/
+		2A 3B 71 3D 30 2E 38 0D  0A 41 63 63 65 70 74 2D    *;q=0.8..Accept-
+		4C 61 6E 67 75 61 67 65  3A 20 65 6E 2D 55 53 2C    Language: en-US,
+		65 6E 3B 71 3D 30 2E 35  0D 0A 41 63 63 65 70 74    en;q=0.5..Accept
+		2D 45 6E 63 6F 64 69 6E  67 3A 20 67 7A 69 70 2C    -Encoding: gzip,
+		20 64 65 66 6C 61 74 65  0D 0A 43 6F 6E 6E 65 63     deflate..Connec
+		74 69 6F 6E 3A 20 6B 65  65 70 2D 61 6C 69 76 65    tion: keep-alive
+		0D 0A 0D 0A                                         ....
+
+		2016-03-08 13:28:39.253754 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 416
+		130.245.165.115:38616 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 49 2F 36 31    GET /images/I/61
+		4F 44 43 57 77 34 75 6F  4C 2E 5F 52 43 7C 30 31    ODCWw4uoL._RC|01
+		68 37 38 4C 2D 63 67 4C  4C 2E 63 73 73 2C 32 31    h78L-cgLL.css,21
+		65 31 78 45 68 58 74 31  4C 2E 63 73 73 5F 2E 63    e1xEhXt1L.css_.c
+		73 73 20 48 54 54 50 2F  31 2E 31 0D 0A 48 6F 73    ss HTTP/1.1..Hos
+		74 3A 20 7A 2D 65 63 78  2E 69 6D 61 67 65 73 2D    t: z-ecx.images-
+		61 6D 61 7A 6F 6E 2E 63  6F 6D 0D 0A 55 73 65 72    amazon.com..User
+		2D 41 67 65 6E 74 3A 20  4D 6F 7A 69 6C 6C 61 2F    -Agent: Mozilla/
+		35 2E 30 20 28 58 31 31  3B 20 55 62 75 6E 74 75    5.0 (X11; Ubuntu
+		3B 20 4C 69 6E 75 78 20  78 38 36 5F 36 34 3B 20    ; Linux x86_64; 
+		72 76 3A 34 34 2E 30 29  20 47 65 63 6B 6F 2F 32    rv:44.0) Gecko/2
+		30 31 30 30 31 30 31 20  46 69 72 65 66 6F 78 2F    0100101 Firefox/
+		34 34 2E 30 0D 0A 41 63  63 65 70 74 3A 20 74 65    44.0..Accept: te
+		78 74 2F 63 73 73 2C 2A  2F 2A 3B 71 3D 30 2E 31    xt/css,*/*;q=0.1
+		0D 0A 41 63 63 65 70 74  2D 4C 61 6E 67 75 61 67    ..Accept-Languag
+		65 3A 20 65 6E 2D 55 53  2C 65 6E 3B 71 3D 30 2E    e: en-US,en;q=0.
+		35 0D 0A 41 63 63 65 70  74 2D 45 6E 63 6F 64 69    5..Accept-Encodi
+		6E 67 3A 20 67 7A 69 70  2C 20 64 65 66 6C 61 74    ng: gzip, deflat
+		65 0D 0A 52 65 66 65 72  65 72 3A 20 68 74 74 70    e..Referer: http
+		3A 2F 2F 77 77 77 2E 61  6D 61 7A 6F 6E 2E 63 6F    ://www.amazon.co
+		6D 2F 0D 0A 43 6F 6E 6E  65 63 74 69 6F 6E 3A 20    m/..Connection: 
+		6B 65 65 70 2D 61 6C 69  76 65 0D 0A 0D 0A          keep-alive....
+
+		2016-03-08 13:28:39.255755 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 436
+		130.245.165.115:38618 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 41 55 49 43 6C 69 65  6E 74 73 2F 41 6D 61 7A    /AUIClients/Amaz
+		6F 6E 55 49 2D 62 38 34  30 34 36 36 32 37 66 34    onUI-b84046627f4
+		39 38 64 36 36 39 30 35  39 36 64 66 35 36 30 66    98d6690596df560f
+		37 31 37 33 63 64 66 35  35 63 61 31 63 2E 5F 56    7173cdf55ca1c._V
+		32 5F 2E 63 73 73 20 48  54 54 50 2F 31 2E 31 0D    2_.css HTTP/1.1.
+		0A 48 6F 73 74 3A 20 7A  2D 65 63 78 2E 69 6D 61    .Host: z-ecx.ima
+		67 65 73 2D 61 6D 61 7A  6F 6E 2E 63 6F 6D 0D 0A    ges-amazon.com..
+		55 73 65 72 2D 41 67 65  6E 74 3A 20 4D 6F 7A 69    User-Agent: Mozi
+		6C 6C 61 2F 35 2E 30 20  28 58 31 31 3B 20 55 62    lla/5.0 (X11; Ub
+		75 6E 74 75 3B 20 4C 69  6E 75 78 20 78 38 36 5F    untu; Linux x86_
+		36 34 3B 20 72 76 3A 34  34 2E 30 29 20 47 65 63    64; rv:44.0) Gec
+		6B 6F 2F 32 30 31 30 30  31 30 31 20 46 69 72 65    ko/20100101 Fire
+		66 6F 78 2F 34 34 2E 30  0D 0A 41 63 63 65 70 74    fox/44.0..Accept
+		3A 20 74 65 78 74 2F 63  73 73 2C 2A 2F 2A 3B 71    : text/css,*/*;q
+		3D 30 2E 31 0D 0A 41 63  63 65 70 74 2D 4C 61 6E    =0.1..Accept-Lan
+		67 75 61 67 65 3A 20 65  6E 2D 55 53 2C 65 6E 3B    guage: en-US,en;
+		71 3D 30 2E 35 0D 0A 41  63 63 65 70 74 2D 45 6E    q=0.5..Accept-En
+		63 6F 64 69 6E 67 3A 20  67 7A 69 70 2C 20 64 65    coding: gzip, de
+		66 6C 61 74 65 0D 0A 52  65 66 65 72 65 72 3A 20    flate..Referer: 
+		68 74 74 70 3A 2F 2F 77  77 77 2E 61 6D 61 7A 6F    http://www.amazo
+		6E 2E 63 6F 6D 2F 0D 0A  43 6F 6E 6E 65 63 74 69    n.com/..Connecti
+		6F 6E 3A 20 6B 65 65 70  2D 61 6C 69 76 65 0D 0A    on: keep-alive..
+		0D 0A                                               ..
+
+		2016-03-08 13:28:39.255832 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 452
+		130.245.165.115:38622 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 41 55 49 43 6C 69 65  6E 74 73 2F 41 6D 61 7A    /AUIClients/Amaz
+		6F 6E 47 61 74 65 77 61  79 48 65 72 6F 74 61 74    onGatewayHerotat
+		6F 72 4A 53 2D 33 61 62  30 63 39 30 65 35 33 30    orJS-3ab0c90e530
+		65 34 64 31 66 62 66 32  66 31 32 35 63 63 34 39    e4d1fbf2f125cc49
+		32 34 62 39 66 65 61 36  34 61 30 63 32 2E 5F 56    24b9fea64a0c2._V
+		32 5F 2E 63 73 73 20 48  54 54 50 2F 31 2E 31 0D    2_.css HTTP/1.1.
+		0A 48 6F 73 74 3A 20 7A  2D 65 63 78 2E 69 6D 61    .Host: z-ecx.ima
+		67 65 73 2D 61 6D 61 7A  6F 6E 2E 63 6F 6D 0D 0A    ges-amazon.com..
+		55 73 65 72 2D 41 67 65  6E 74 3A 20 4D 6F 7A 69    User-Agent: Mozi
+		6C 6C 61 2F 35 2E 30 20  28 58 31 31 3B 20 55 62    lla/5.0 (X11; Ub
+		75 6E 74 75 3B 20 4C 69  6E 75 78 20 78 38 36 5F    untu; Linux x86_
+		36 34 3B 20 72 76 3A 34  34 2E 30 29 20 47 65 63    64; rv:44.0) Gec
+		6B 6F 2F 32 30 31 30 30  31 30 31 20 46 69 72 65    ko/20100101 Fire
+		66 6F 78 2F 34 34 2E 30  0D 0A 41 63 63 65 70 74    fox/44.0..Accept
+		3A 20 74 65 78 74 2F 63  73 73 2C 2A 2F 2A 3B 71    : text/css,*/*;q
+		3D 30 2E 31 0D 0A 41 63  63 65 70 74 2D 4C 61 6E    =0.1..Accept-Lan
+		67 75 61 67 65 3A 20 65  6E 2D 55 53 2C 65 6E 3B    guage: en-US,en;
+		71 3D 30 2E 35 0D 0A 41  63 63 65 70 74 2D 45 6E    q=0.5..Accept-En
+		63 6F 64 69 6E 67 3A 20  67 7A 69 70 2C 20 64 65    coding: gzip, de
+		66 6C 61 74 65 0D 0A 52  65 66 65 72 65 72 3A 20    flate..Referer: 
+		68 74 74 70 3A 2F 2F 77  77 77 2E 61 6D 61 7A 6F    http://www.amazo
+		6E 2E 63 6F 6D 2F 0D 0A  43 6F 6E 6E 65 63 74 69    n.com/..Connecti
+		6F 6E 3A 20 6B 65 65 70  2D 61 6C 69 76 65 0D 0A    on: keep-alive..
+		0D 0A                                               ..
+
+		2016-03-08 13:28:39.255894 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 450
+		130.245.165.115:38621 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 41 55 49 43 6C 69 65  6E 74 73 2F 41 6D 61 7A    /AUIClients/Amaz
+		6F 6E 47 61 74 65 77 61  79 41 75 69 41 73 73 65    onGatewayAuiAsse
+		74 73 2D 31 34 37 64 61  31 65 65 62 65 34 37 36    ts-147da1eebe476
+		65 34 33 30 61 62 63 63  36 33 32 63 32 36 62 66    e430abcc632c26bf
+		62 64 64 61 33 62 32 35  66 66 64 2E 5F 56 32 5F    bdda3b25ffd._V2_
+		2E 63 73 73 20 48 54 54  50 2F 31 2E 31 0D 0A 48    .css HTTP/1.1..H
+		6F 73 74 3A 20 7A 2D 65  63 78 2E 69 6D 61 67 65    ost: z-ecx.image
+		73 2D 61 6D 61 7A 6F 6E  2E 63 6F 6D 0D 0A 55 73    s-amazon.com..Us
+		65 72 2D 41 67 65 6E 74  3A 20 4D 6F 7A 69 6C 6C    er-Agent: Mozill
+		61 2F 35 2E 30 20 28 58  31 31 3B 20 55 62 75 6E    a/5.0 (X11; Ubun
+		74 75 3B 20 4C 69 6E 75  78 20 78 38 36 5F 36 34    tu; Linux x86_64
+		3B 20 72 76 3A 34 34 2E  30 29 20 47 65 63 6B 6F    ; rv:44.0) Gecko
+		2F 32 30 31 30 30 31 30  31 20 46 69 72 65 66 6F    /20100101 Firefo
+		78 2F 34 34 2E 30 0D 0A  41 63 63 65 70 74 3A 20    x/44.0..Accept: 
+		74 65 78 74 2F 63 73 73  2C 2A 2F 2A 3B 71 3D 30    text/css,*/*;q=0
+		2E 31 0D 0A 41 63 63 65  70 74 2D 4C 61 6E 67 75    .1..Accept-Langu
+		61 67 65 3A 20 65 6E 2D  55 53 2C 65 6E 3B 71 3D    age: en-US,en;q=
+		30 2E 35 0D 0A 41 63 63  65 70 74 2D 45 6E 63 6F    0.5..Accept-Enco
+		64 69 6E 67 3A 20 67 7A  69 70 2C 20 64 65 66 6C    ding: gzip, defl
+		61 74 65 0D 0A 52 65 66  65 72 65 72 3A 20 68 74    ate..Referer: ht
+		74 70 3A 2F 2F 77 77 77  2E 61 6D 61 7A 6F 6E 2E    tp://www.amazon.
+		63 6F 6D 2F 0D 0A 43 6F  6E 6E 65 63 74 69 6F 6E    com/..Connection
+		3A 20 6B 65 65 70 2D 61  6C 69 76 65 0D 0A 0D 0A    : keep-alive....
+
+		2016-03-08 13:28:39.268869 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 459
+		130.245.165.115:45592 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 67 6E 6F 2F 73 70 72  69 74 65 73 2F 6E 61 76    /gno/sprites/nav
+		2D 73 70 72 69 74 65 2D  67 6C 6F 62 61 6C 5F 62    -sprite-global_b
+		6C 75 65 62 65 61 63 6F  6E 2D 31 78 5F 6F 70 74    luebeacon-1x_opt
+		69 6D 69 7A 65 64 5F 66  72 65 73 68 2E 5F 43 42    imized_fresh._CB
+		32 39 36 33 38 36 37 37  39 5F 2E 70 6E 67 20 48    296386779_.png H
+		54 54 50 2F 31 2E 31 0D  0A 48 6F 73 74 3A 20 67    TTP/1.1..Host: g
+		2D 65 63 78 2E 69 6D 61  67 65 73 2D 61 6D 61 7A    -ecx.images-amaz
+		6F 6E 2E 63 6F 6D 0D 0A  55 73 65 72 2D 41 67 65    on.com..User-Age
+		6E 74 3A 20 4D 6F 7A 69  6C 6C 61 2F 35 2E 30 20    nt: Mozilla/5.0 
+		28 58 31 31 3B 20 55 62  75 6E 74 75 3B 20 4C 69    (X11; Ubuntu; Li
+		6E 75 78 20 78 38 36 5F  36 34 3B 20 72 76 3A 34    nux x86_64; rv:4
+		34 2E 30 29 20 47 65 63  6B 6F 2F 32 30 31 30 30    4.0) Gecko/20100
+		31 30 31 20 46 69 72 65  66 6F 78 2F 34 34 2E 30    101 Firefox/44.0
+		0D 0A 41 63 63 65 70 74  3A 20 69 6D 61 67 65 2F    ..Accept: image/
+		70 6E 67 2C 69 6D 61 67  65 2F 2A 3B 71 3D 30 2E    png,image/*;q=0.
+		38 2C 2A 2F 2A 3B 71 3D  30 2E 35 0D 0A 41 63 63    8,*/*;q=0.5..Acc
+		65 70 74 2D 4C 61 6E 67  75 61 67 65 3A 20 65 6E    ept-Language: en
+		2D 55 53 2C 65 6E 3B 71  3D 30 2E 35 0D 0A 41 63    -US,en;q=0.5..Ac
+		63 65 70 74 2D 45 6E 63  6F 64 69 6E 67 3A 20 67    cept-Encoding: g
+		7A 69 70 2C 20 64 65 66  6C 61 74 65 0D 0A 52 65    zip, deflate..Re
+		66 65 72 65 72 3A 20 68  74 74 70 3A 2F 2F 77 77    ferer: http://ww
+		77 2E 61 6D 61 7A 6F 6E  2E 63 6F 6D 2F 0D 0A 43    w.amazon.com/..C
+		6F 6E 6E 65 63 74 69 6F  6E 3A 20 6B 65 65 70 2D    onnection: keep-
+		61 6C 69 76 65 0D 0A 0D  0A                         alive....
+
+		2016-03-08 13:28:39.268923 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 760
+		130.245.165.115:41213 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 31 2F 62  61 74 63 68 2F 31 2F 4F    GET /1/batch/1/O
+		50 2F 41 54 56 50 44 4B  49 4B 58 30 44 45 52 3A    P/ATVPDKIKX0DER:
+		31 37 39 2D 37 38 38 39  32 30 37 2D 31 31 32 36    179-7889207-1126
+		38 30 37 3A 30 50 33 51  32 59 56 50 46 4A 30 58    807:0P3Q2YVPFJ0X
+		36 4B 36 5A 38 47 39 51  24 75 65 64 61 74 61 3D    6K6Z8G9Q$uedata=
+		73 3A 25 32 46 75 65 64  61 74 61 25 32 46 6E 76    s:%2Fuedata%2Fnv
+		70 25 32 46 75 6E 73 74  69 63 6B 79 25 32 46 31    p%2Funsticky%2F1
+		37 39 2D 37 38 38 39 32  30 37 2D 31 31 32 36 38    79-7889207-11268
+		30 37 25 32 46 47 61 74  65 77 61 79 25 32 46 6E    07%2FGateway%2Fn
+		74 70 6F 66 66 72 77 25  33 46 73 74 61 74 69 63    tpoffrw%3Fstatic
+		62 25 32 36 69 64 25 33  44 30 50 33 51 32 59 56    b%26id%3D0P3Q2YV
+		50 46 4A 30 58 36 4B 36  5A 38 47 39 51 25 32 36    PFJ0X6K6Z8G9Q%26
+		70 74 79 25 33 44 47 61  74 65 77 61 79 25 32 36    pty%3DGateway%26
+		73 70 74 79 25 33 44 64  65 73 6B 74 6F 70 25 32    spty%3Ddesktop%2
+		36 70 74 69 25 33 44 64  65 73 6B 74 6F 70 3A 31    6pti%3Ddesktop:1
+		30 30 30 20 48 54 54 50  2F 31 2E 31 0D 0A 48 6F    000 HTTP/1.1..Ho
+		73 74 3A 20 66 6C 73 2D  6E 61 2E 61 6D 61 7A 6F    st: fls-na.amazo
+		6E 2E 63 6F 6D 0D 0A 55  73 65 72 2D 41 67 65 6E    n.com..User-Agen
+		74 3A 20 4D 6F 7A 69 6C  6C 61 2F 35 2E 30 20 28    t: Mozilla/5.0 (
+		58 31 31 3B 20 55 62 75  6E 74 75 3B 20 4C 69 6E    X11; Ubuntu; Lin
+		75 78 20 78 38 36 5F 36  34 3B 20 72 76 3A 34 34    ux x86_64; rv:44
+		2E 30 29 20 47 65 63 6B  6F 2F 32 30 31 30 30 31    .0) Gecko/201001
+		30 31 20 46 69 72 65 66  6F 78 2F 34 34 2E 30 0D    01 Firefox/44.0.
+		0A 41 63 63 65 70 74 3A  20 69 6D 61 67 65 2F 70    .Accept: image/p
+		6E 67 2C 69 6D 61 67 65  2F 2A 3B 71 3D 30 2E 38    ng,image/*;q=0.8
+		2C 2A 2F 2A 3B 71 3D 30  2E 35 0D 0A 41 63 63 65    ,*/*;q=0.5..Acce
+		70 74 2D 4C 61 6E 67 75  61 67 65 3A 20 65 6E 2D    pt-Language: en-
+		55 53 2C 65 6E 3B 71 3D  30 2E 35 0D 0A 41 63 63    US,en;q=0.5..Acc
+		65 70 74 2D 45 6E 63 6F  64 69 6E 67 3A 20 67 7A    ept-Encoding: gz
+		69 70 2C 20 64 65 66 6C  61 74 65 0D 0A 52 65 66    ip, deflate..Ref
+		65 72 65 72 3A 20 68 74  74 70 3A 2F 2F 77 77 77    erer: http://www
+		2E 61 6D 61 7A 6F 6E 2E  63 6F 6D 2F 0D 0A 43 6F    .amazon.com/..Co
+		6F 6B 69 65 3A 20 73 6B  69 6E 3D 6E 6F 73 6B 69    okie: skin=noski
+		6E 3B 20 78 2D 77 6C 2D  75 69 64 3D 31 66 50 59    n; x-wl-uid=1fPY
+		32 47 65 61 59 62 4B 54  68 5A 68 36 57 49 33 35    2GeaYbKThZh6WI35
+		61 31 35 2F 48 4A 53 30  4C 74 4B 43 35 58 2B 67    a15/HJS0LtKC5X+g
+		34 7A 4F 2B 39 4A 64 2F  79 50 47 54 75 61 78 48    4zO+9Jd/yPGTuaxH
+		45 38 48 38 4C 33 58 71  48 36 64 78 43 59 38 43    E8H8L3XqH6dxCY8C
+		73 44 57 4B 77 62 72 30  3D 3B 20 73 65 73 73 69    sDWKwbr0=; sessi
+		6F 6E 2D 69 64 2D 74 69  6D 65 3D 32 30 38 32 37    on-id-time=20827
+		38 37 32 30 31 6C 3B 20  73 65 73 73 69 6F 6E 2D    87201l; session-
+		69 64 3D 31 37 39 2D 37  38 38 39 32 30 37 2D 31    id=179-7889207-1
+		31 32 36 38 30 37 0D 0A  43 6F 6E 6E 65 63 74 69    126807..Connecti
+		6F 6E 3A 20 6B 65 65 70  2D 61 6C 69 76 65 0D 0A    on: keep-alive..
+		0D 0A                                               ..
+
+		2016-03-08 13:28:39.273789 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 449
+		130.245.165.115:45599 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 70 6F 70 70 69 6E 2F  67 61 74 65 77 61 79 2F    /poppin/gateway/
+		36 37 32 37 33 5F 50 6F  70 70 69 6E 48 31 5F 50    67273_PoppinH1_P
+		72 65 6D 69 65 72 65 73  5F 76 30 36 5F 66 69 6E    remieres_v06_fin
+		61 6C 2E 5F 43 42 32 39  36 34 36 34 38 33 36 5F    al._CB296464836_
+		2E 6A 70 67 20 48 54 54  50 2F 31 2E 31 0D 0A 48    .jpg HTTP/1.1..H
+		6F 73 74 3A 20 67 2D 65  63 78 2E 69 6D 61 67 65    ost: g-ecx.image
+		73 2D 61 6D 61 7A 6F 6E  2E 63 6F 6D 0D 0A 55 73    s-amazon.com..Us
+		65 72 2D 41 67 65 6E 74  3A 20 4D 6F 7A 69 6C 6C    er-Agent: Mozill
+		61 2F 35 2E 30 20 28 58  31 31 3B 20 55 62 75 6E    a/5.0 (X11; Ubun
+		74 75 3B 20 4C 69 6E 75  78 20 78 38 36 5F 36 34    tu; Linux x86_64
+		3B 20 72 76 3A 34 34 2E  30 29 20 47 65 63 6B 6F    ; rv:44.0) Gecko
+		2F 32 30 31 30 30 31 30  31 20 46 69 72 65 66 6F    /20100101 Firefo
+		78 2F 34 34 2E 30 0D 0A  41 63 63 65 70 74 3A 20    x/44.0..Accept: 
+		69 6D 61 67 65 2F 70 6E  67 2C 69 6D 61 67 65 2F    image/png,image/
+		2A 3B 71 3D 30 2E 38 2C  2A 2F 2A 3B 71 3D 30 2E    *;q=0.8,*/*;q=0.
+		35 0D 0A 41 63 63 65 70  74 2D 4C 61 6E 67 75 61    5..Accept-Langua
+		67 65 3A 20 65 6E 2D 55  53 2C 65 6E 3B 71 3D 30    ge: en-US,en;q=0
+		2E 35 0D 0A 41 63 63 65  70 74 2D 45 6E 63 6F 64    .5..Accept-Encod
+		69 6E 67 3A 20 67 7A 69  70 2C 20 64 65 66 6C 61    ing: gzip, defla
+		74 65 0D 0A 52 65 66 65  72 65 72 3A 20 68 74 74    te..Referer: htt
+		70 3A 2F 2F 77 77 77 2E  61 6D 61 7A 6F 6E 2E 63    p://www.amazon.c
+		6F 6D 2F 0D 0A 43 6F 6E  6E 65 63 74 69 6F 6E 3A    om/..Connection:
+		20 6B 65 65 70 2D 61 6C  69 76 65 0D 0A 0D 0A        keep-alive....
+
+		2016-03-08 13:28:39.273960 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 433
+		130.245.165.115:45598 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 78 2D 6C 6F 63 61 6C  65 2F 63 6F 6D 6D 6F 6E    /x-locale/common
+		2F 74 72 61 6E 73 70 61  72 65 6E 74 2D 70 69 78    /transparent-pix
+		65 6C 2E 5F 43 42 33 38  36 39 34 32 34 36 34 5F    el._CB386942464_
+		2E 67 69 66 20 48 54 54  50 2F 31 2E 31 0D 0A 48    .gif HTTP/1.1..H
+		6F 73 74 3A 20 67 2D 65  63 78 2E 69 6D 61 67 65    ost: g-ecx.image
+		73 2D 61 6D 61 7A 6F 6E  2E 63 6F 6D 0D 0A 55 73    s-amazon.com..Us
+		65 72 2D 41 67 65 6E 74  3A 20 4D 6F 7A 69 6C 6C    er-Agent: Mozill
+		61 2F 35 2E 30 20 28 58  31 31 3B 20 55 62 75 6E    a/5.0 (X11; Ubun
+		74 75 3B 20 4C 69 6E 75  78 20 78 38 36 5F 36 34    tu; Linux x86_64
+		3B 20 72 76 3A 34 34 2E  30 29 20 47 65 63 6B 6F    ; rv:44.0) Gecko
+		2F 32 30 31 30 30 31 30  31 20 46 69 72 65 66 6F    /20100101 Firefo
+		78 2F 34 34 2E 30 0D 0A  41 63 63 65 70 74 3A 20    x/44.0..Accept: 
+		69 6D 61 67 65 2F 70 6E  67 2C 69 6D 61 67 65 2F    image/png,image/
+		2A 3B 71 3D 30 2E 38 2C  2A 2F 2A 3B 71 3D 30 2E    *;q=0.8,*/*;q=0.
+		35 0D 0A 41 63 63 65 70  74 2D 4C 61 6E 67 75 61    5..Accept-Langua
+		67 65 3A 20 65 6E 2D 55  53 2C 65 6E 3B 71 3D 30    ge: en-US,en;q=0
+		2E 35 0D 0A 41 63 63 65  70 74 2D 45 6E 63 6F 64    .5..Accept-Encod
+		69 6E 67 3A 20 67 7A 69  70 2C 20 64 65 66 6C 61    ing: gzip, defla
+		74 65 0D 0A 52 65 66 65  72 65 72 3A 20 68 74 74    te..Referer: htt
+		70 3A 2F 2F 77 77 77 2E  61 6D 61 7A 6F 6E 2E 63    p://www.amazon.c
+		6F 6D 2F 0D 0A 43 6F 6E  6E 65 63 74 69 6F 6E 3A    om/..Connection:
+		20 6B 65 65 70 2D 61 6C  69 76 65 0D 0A 0D 0A        keep-alive....
+
+		2016-03-08 13:28:39.313910 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 429
+		130.245.165.115:45599 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 70 6F 70 70 69 6E 2F  53 57 4D 5F 57 65 65 6B    /poppin/SWM_Week
+		6E 69 67 68 74 73 5F 42  6C 75 65 5F 72 32 2E 5F    nights_Blue_r2._
+		43 42 32 39 36 34 37 39  38 39 32 5F 2E 70 6E 67    CB296479892_.png
+		20 48 54 54 50 2F 31 2E  31 0D 0A 48 6F 73 74 3A     HTTP/1.1..Host:
+		20 67 2D 65 63 78 2E 69  6D 61 67 65 73 2D 61 6D     g-ecx.images-am
+		61 7A 6F 6E 2E 63 6F 6D  0D 0A 55 73 65 72 2D 41    azon.com..User-A
+		67 65 6E 74 3A 20 4D 6F  7A 69 6C 6C 61 2F 35 2E    gent: Mozilla/5.
+		30 20 28 58 31 31 3B 20  55 62 75 6E 74 75 3B 20    0 (X11; Ubuntu; 
+		4C 69 6E 75 78 20 78 38  36 5F 36 34 3B 20 72 76    Linux x86_64; rv
+		3A 34 34 2E 30 29 20 47  65 63 6B 6F 2F 32 30 31    :44.0) Gecko/201
+		30 30 31 30 31 20 46 69  72 65 66 6F 78 2F 34 34    00101 Firefox/44
+		2E 30 0D 0A 41 63 63 65  70 74 3A 20 69 6D 61 67    .0..Accept: imag
+		65 2F 70 6E 67 2C 69 6D  61 67 65 2F 2A 3B 71 3D    e/png,image/*;q=
+		30 2E 38 2C 2A 2F 2A 3B  71 3D 30 2E 35 0D 0A 41    0.8,*/*;q=0.5..A
+		63 63 65 70 74 2D 4C 61  6E 67 75 61 67 65 3A 20    ccept-Language: 
+		65 6E 2D 55 53 2C 65 6E  3B 71 3D 30 2E 35 0D 0A    en-US,en;q=0.5..
+		41 63 63 65 70 74 2D 45  6E 63 6F 64 69 6E 67 3A    Accept-Encoding:
+		20 67 7A 69 70 2C 20 64  65 66 6C 61 74 65 0D 0A     gzip, deflate..
+		52 65 66 65 72 65 72 3A  20 68 74 74 70 3A 2F 2F    Referer: http://
+		77 77 77 2E 61 6D 61 7A  6F 6E 2E 63 6F 6D 2F 0D    www.amazon.com/.
+		0A 43 6F 6E 6E 65 63 74  69 6F 6E 3A 20 6B 65 65    .Connection: kee
+		70 2D 61 6C 69 76 65 0D  0A 0D 0A                   p-alive....
+
+		2016-03-08 13:28:39.317092 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 513
+		130.245.165.115:45592 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 61 6D 61 7A 6F 6E 75  69 2F 6C 6F 61 64 69 6E    /amazonui/loadin
+		67 2F 6C 6F 61 64 69 6E  67 2D 32 78 2D 67 72 61    g/loading-2x-gra
+		79 2E 5F 56 31 5F 2E 67  69 66 20 48 54 54 50 2F    y._V1_.gif HTTP/
+		31 2E 31 0D 0A 48 6F 73  74 3A 20 67 2D 65 63 78    1.1..Host: g-ecx
+		2E 69 6D 61 67 65 73 2D  61 6D 61 7A 6F 6E 2E 63    .images-amazon.c
+		6F 6D 0D 0A 55 73 65 72  2D 41 67 65 6E 74 3A 20    om..User-Agent: 
+		4D 6F 7A 69 6C 6C 61 2F  35 2E 30 20 28 58 31 31    Mozilla/5.0 (X11
+		3B 20 55 62 75 6E 74 75  3B 20 4C 69 6E 75 78 20    ; Ubuntu; Linux 
+		78 38 36 5F 36 34 3B 20  72 76 3A 34 34 2E 30 29    x86_64; rv:44.0)
+		20 47 65 63 6B 6F 2F 32  30 31 30 30 31 30 31 20     Gecko/20100101 
+		46 69 72 65 66 6F 78 2F  34 34 2E 30 0D 0A 41 63    Firefox/44.0..Ac
+		63 65 70 74 3A 20 69 6D  61 67 65 2F 70 6E 67 2C    cept: image/png,
+		69 6D 61 67 65 2F 2A 3B  71 3D 30 2E 38 2C 2A 2F    image/*;q=0.8,*/
+		2A 3B 71 3D 30 2E 35 0D  0A 41 63 63 65 70 74 2D    *;q=0.5..Accept-
+		4C 61 6E 67 75 61 67 65  3A 20 65 6E 2D 55 53 2C    Language: en-US,
+		65 6E 3B 71 3D 30 2E 35  0D 0A 41 63 63 65 70 74    en;q=0.5..Accept
+		2D 45 6E 63 6F 64 69 6E  67 3A 20 67 7A 69 70 2C    -Encoding: gzip,
+		20 64 65 66 6C 61 74 65  0D 0A 52 65 66 65 72 65     deflate..Refere
+		72 3A 20 68 74 74 70 3A  2F 2F 7A 2D 65 63 78 2E    r: http://z-ecx.
+		69 6D 61 67 65 73 2D 61  6D 61 7A 6F 6E 2E 63 6F    images-amazon.co
+		6D 2F 69 6D 61 67 65 73  2F 47 2F 30 31 2F 41 55    m/images/G/01/AU
+		49 43 6C 69 65 6E 74 73  2F 41 6D 61 7A 6F 6E 55    IClients/AmazonU
+		49 2D 62 38 34 30 34 36  36 32 37 66 34 39 38 64    I-b84046627f498d
+		36 36 39 30 35 39 36 64  66 35 36 30 66 37 31 37    6690596df560f717
+		33 63 64 66 35 35 63 61  31 63 2E 5F 56 32 5F 2E    3cdf55ca1c._V2_.
+		63 73 73 0D 0A 43 6F 6E  6E 65 63 74 69 6F 6E 3A    css..Connection:
+		20 6B 65 65 70 2D 61 6C  69 76 65 0D 0A 0D 0A        keep-alive....
+
+		2016-03-08 13:28:39.334553 28:D2:44:20:1A:7A -> 04:A1:51:78:00:78 type 0x0800 len 451
+		130.245.165.115:38625 -> 130.245.165.115:80 TCP 
+		47 45 54 20 2F 69 6D 61  67 65 73 2F 47 2F 30 31    GET /images/G/01
+		2F 41 55 49 43 6C 69 65  6E 74 73 2F 41 6D 61 7A    /AUIClients/Amaz
+		6F 6E 55 49 2D 33 62 66  31 61 62 66 34 64 63 39    onUI-3bf1abf4dc9
+		32 38 34 64 35 62 36 34  61 65 30 34 64 36 35 32    284d5b64ae04d652
+		62 32 39 62 30 33 65 33  65 31 30 31 62 2E 5F 56    b29b03e3e101b._V
+		32 5F 2E 6A 73 20 48 54  54 50 2F 31 2E 31 0D 0A    2_.js HTTP/1.1..
+		48 6F 73 74 3A 20 7A 2D  65 63 78 2E 69 6D 61 67    Host: z-ecx.imag
+		65 73 2D 61 6D 61 7A 6F  6E 2E 63 6F 6D 0D 0A 55    es-amazon.com..U
+		73 65 72 2D 41 67 65 6E  74 3A 20 4D 6F 7A 69 6C    ser-Agent: Mozil
+		6C 61 2F 35 2E 30 20 28  58 31 31 3B 20 55 62 75    la/5.0 (X11; Ubu
+		6E 74 75 3B 20 4C 69 6E  75 78 20 78 38 36 5F 36    ntu; Linux x86_6
+		34 3B 20 72 76 3A 34 34  2E 30 29 20 47 65 63 6B    4; rv:44.0) Geck
+		6F 2F 32 30 31 30 30 31  30 31 20 46 69 72 65 66    o/20100101 Firef
+		6F 78 2F 34 34 2E 30 0D  0A 41 63 63 65 70 74 3A    ox/44.0..Accept:
+		20 2A 2F 2A 0D 0A 41 63  63 65 70 74 2D 4C 61 6E     */*..Accept-Lan
+		67 75 61 67 65 3A 20 65  6E 2D 55 53 2C 65 6E 3B    guage: en-US,en;
+		71 3D 30 2E 35 0D 0A 41  63 63 65 70 74 2D 45 6E    q=0.5..Accept-En
+		63 6F 64 69 6E 67 3A 20  67 7A 69 70 2C 20 64 65    coding: gzip, de
+		66 6C 61 74 65 0D 0A 52  65 66 65 72 65 72 3A 20    flate..Referer: 
+		68 74 74 70 3A 2F 2F 77  77 77 2E 61 6D 61 7A 6F    http://www.amazo
+		6E 2E 63 6F 6D 2F 0D 0A  4F 72 69 67 69 6E 3A 20    n.com/..Origin: 
+		68 74 74 70 3A 2F 2F 77  77 77 2E 61 6D 61 7A 6F    http://www.amazo
+		6E 2E 63 6F 6D 0D 0A 43  6F 6E 6E 65 63 74 69 6F    n.com..Connectio
+		6E 3A 20 6B 65 65 70 2D  61 6C 69 76 65 0D 0A 0D    n: keep-alive...
+		0A                                                  .
+
